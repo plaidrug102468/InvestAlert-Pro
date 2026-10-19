@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.investalert.app.data.AppSettings
+import com.investalert.app.data.AssetSearchProvider
 import com.investalert.app.data.AssetSuggestion
 import com.investalert.app.data.ScreenshotInvestmentDraft
 import com.investalert.app.model.Holding
@@ -115,7 +116,7 @@ fun InvestmentDialog(
                 searching = false
                 suggestions = matches
                 if (selectedAsset == null && matches.isNotEmpty()) {
-                    applyAsset(matches.first())
+                    AssetSearchProvider.bestScreenshotMatch(draft, matches)?.let { applyAsset(it) }
                 }
             }
         }
@@ -177,6 +178,9 @@ fun InvestmentDialog(
                         ) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("Screenshot details detected", fontWeight = FontWeight.Bold)
+                                draftIdentity(scanDraft)?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall)
+                                }
                                 if (importedWholeUnits != null || importedFractionalUnits != null) {
                                     Text(
                                         "Whole shares: ${number(importedWholeUnits ?: 0.0)} • Fractional: ${number(importedFractionalUnits ?: 0.0)} • Total: ${unitsText.ifBlank { "—" }}",
@@ -397,4 +401,13 @@ fun InvestmentDialog(
             }
         }
     }
+}
+
+private fun draftIdentity(draft: ScreenshotInvestmentDraft?): String? {
+    draft ?: return null
+    val parts = buildList {
+        draft.detectedSymbol?.takeIf { it.isNotBlank() }?.let { add("Ticker: $it") }
+        draft.detectedName?.takeIf { it.isNotBlank() }?.let { add("Name: $it") }
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(" • ")
 }

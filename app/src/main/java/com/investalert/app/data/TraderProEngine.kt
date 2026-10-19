@@ -35,7 +35,7 @@ object TraderProEngine {
         val sourceNote: String = "Market research only. Data can be delayed or unavailable."
     )
 
-    private val usUniverse = listOf("MSFT","AAPL","GOOGL","AMZN","NVDA","META","JPM","V","BRK-B","TSLA")
+    private val usUniverse = listOf("MSFT","AAPL","GOOGL","AMZN","NVDA","META","JPM","V","BRK-B","TSLA","AVGO","COST","NFLX","AMD","LLY")
     private val jseUniverse = listOf("NPN.JO","SOL.JO","FSR.JO","SBK.JO","AGL.JO","ANG.JO","BTI.JO","CPI.JO","APN.JO","MTN.JO","BID.JO","SHP.JO")
     private val cryptoUniverse = listOf("BTC-USD","ETH-USD","SOL-USD","XRP-USD","BNB-USD","ADA-USD","DOGE-USD","SHIB-USD","LINK-USD","AVAX-USD")
     private val forexUniverse = listOf("USDZAR=X","EURZAR=X","GBPZAR=X","EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCHF=X")
@@ -148,9 +148,14 @@ object TraderProEngine {
         val price = closes.last()
         val sma20 = closes.takeLast(20).average()
         val sma50 = if (closes.size >= 50) closes.takeLast(50).average() else null
+        val sma200 = if (closes.size >= 200) closes.takeLast(200).average() else null
         val rsi = rsi(closes,14)
         val momentum30 = if (closes.size >= 31) (price / closes[closes.size-31] - 1.0) * 100.0 else null
+        val momentum90 = if (closes.size >= 91) (price / closes[closes.size-91] - 1.0) * 100.0 else null
         val vol = volatility(closes.takeLast(minOf(31,closes.size)))
+        val yearWindow = closes.takeLast(minOf(252, closes.size))
+        val yearLow = yearWindow.minOrNull()
+        val yearHigh = yearWindow.maxOrNull()
 
         var score = 50
         val reasons = mutableListOf<String>()
@@ -160,6 +165,11 @@ object TraderProEngine {
         sma50?.let {
             if (price > it) { score += 10; reasons += "Price is above the 50-day average." }
             else { score -= 10; reasons += "Price is below the 50-day average." }
+        }
+
+        sma200?.let {
+            if (price > it) { score += 7; reasons += "Long-term trend is above the 200-day average." }
+            else { score -= 7; reasons += "Long-term trend is below the 200-day average." }
         }
 
         rsi?.let {
@@ -180,9 +190,24 @@ object TraderProEngine {
             }
         }
 
+        momentum90?.let {
+            if (it > 0) score += 4 else score -= 4
+            reasons += "90-day momentum is ${signedPct(it)}."
+        }
+
         vol?.let {
-            if (it > 55) { score -= 8; reasons += "Recent volatility is high (${fmt1(it)}% annualised)." }
+            if (it > 80) { score -= 10; reasons += "Recent volatility is very high (${fmt1(it)}% annualised)." }
+            else if (it > 55) { score -= 8; reasons += "Recent volatility is high (${fmt1(it)}% annualised)." }
             else reasons += "Recent volatility is about ${fmt1(it)}% annualised."
+        }
+
+        if (yearLow != null && yearHigh != null && yearHigh > yearLow) {
+            val rangePosition = (price - yearLow) / (yearHigh - yearLow) * 100.0
+            reasons += when {
+                rangePosition >= 92 -> "Price is near its 52-week high; momentum is strong, but entry risk is less forgiving."
+                rangePosition <= 15 -> "Price is near its 52-week low; treat this as a recovery/risk situation rather than a bargain by default."
+                else -> "Price is around ${fmt1(rangePosition)}% of its 52-week range."
+            }
         }
 
         score = score.coerceIn(0,100)
@@ -194,8 +219,8 @@ object TraderProEngine {
             else -> "High volatility / weak trend"
         }
         val confidence = when {
-            closes.size >= 100 -> "Medium-high"
-            closes.size >= 50 -> "Medium"
+            closes.size >= 200 -> "Medium-high"
+            closes.size >= 90 -> "Medium"
             else -> "Low-medium"
         }
 
@@ -204,12 +229,12 @@ object TraderProEngine {
 
     private fun fetchHistory(symbol: String): Triple<String,String,List<Double>> {
         val encoded = URLEncoder.encode(symbol.trim(),Charsets.UTF_8.name())
-        val url = URL("https://query1.finance.yahoo.com/v8/finance/chart/$encoded?interval=1d&range=6mo")
+        val url = URL("https://query1.finance.yahoo.com/v8/finance/chart/$encoded?interval=1d&range=1y")
         val c = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 12000
             readTimeout = 12000
-            setRequestProperty("User-Agent","Mozilla/5.0 InvestAlert/1.1")
+            setRequestProperty("User-Agent","Mozilla/5.0 InvestAlert/1.4")
             setRequestProperty("Accept","application/json")
         }
         try {

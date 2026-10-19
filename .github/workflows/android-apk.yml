@@ -69,13 +69,13 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.5.2.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.5.3.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InvestAlert-Pro-v1.5.2
-          path: InvestAlert-Pro-v1.5.2.apk
+          name: InvestAlert-Pro-v1.5.3
+          path: InvestAlert-Pro-v1.5.3.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -83,8 +83,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.5.2 >/dev/null 2>&1; then
-            gh release upload v1.5.2 InvestAlert-Pro-v1.5.2.apk --clobber
+          if gh release view v1.5.3 >/dev/null 2>&1; then
+            gh release upload v1.5.3 InvestAlert-Pro-v1.5.3.apk --clobber
           else
-            gh release create v1.5.2 InvestAlert-Pro-v1.5.2.apk               --title "InvestAlert Pro v1.5.2"               --notes "InvestAlert Pro v1.5.2. Stable baseline build with screenshot import, themes, dropdown currencies, watchlist, transaction history, news links, configurable alerts and morning brief."
+            gh release create v1.5.3 InvestAlert-Pro-v1.5.3.apk               --title "InvestAlert Pro v1.5.3"               --notes "InvestAlert Pro v1.5.3. Improves EasyEquities screenshot import including FSR fractional shares, fixes accent colors in dark mode, adds Allan Gray funds and AMETFs, and supports manual values for managed unit trusts."
           fi

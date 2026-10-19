@@ -748,15 +748,33 @@ private fun InvestmentDialog(
     var highText by remember(initial?.id) { mutableStateOf(initial?.highAlert?.toString() ?: "") }
     var enabled by remember(initial?.id) { mutableStateOf(initial?.enabled ?: true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var manualMode by remember(initial?.id) { mutableStateOf(false) }
 
-    LaunchedEffect(searchQuery) {
+    LaunchedEffect(searchQuery, manualMode, selectedAsset) {
+        if (manualMode) {
+            suggestions = emptyList()
+            searching = false
+            return@LaunchedEffect
+        }
         val query = searchQuery.trim()
+        if (selectedAsset != null && query == selectedAsset?.name) {
+            suggestions = emptyList()
+            searching = false
+            return@LaunchedEffect
+        }
+        if (query.isBlank()) {
+            onSearchAssets("") {
+                suggestions = it
+                searching = false
+            }
+            return@LaunchedEffect
+        }
         if (query.length < 2) {
             suggestions = emptyList()
             searching = false
             return@LaunchedEffect
         }
-        delay(300)
+        delay(220)
         searching = true
         onSearchAssets(query) {
             suggestions = it
@@ -789,23 +807,25 @@ private fun InvestmentDialog(
                         style = MaterialTheme.typography.bodySmall
                     )
 
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = {
-                            searchQuery = it
-                            if (selectedAsset?.name != it) selectedAsset = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Search investment") },
-                        placeholder = { Text("Start typing Aspen, Bitcoin, USD/ZAR, Apple…") },
-                        singleLine = true
-                    )
-
-                    if (searching) {
-                        Text("Searching markets…", style = MaterialTheme.typography.labelMedium)
+                    if (!manualMode) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                if (selectedAsset?.name != it) selectedAsset = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Search and select investment") },
+                            placeholder = { Text("Aspen, Bitcoin, USD/ZAR, Apple…") },
+                            singleLine = true
+                        )
                     }
 
-                    if (suggestions.isNotEmpty() && selectedAsset == null) {
+                    if (searching && !manualMode) {
+                        Text("Searching global markets…", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    if (suggestions.isNotEmpty() && selectedAsset == null && !manualMode) {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -860,45 +880,70 @@ private fun InvestmentDialog(
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text("Selected", style = MaterialTheme.typography.labelSmall)
                                 Text(asset.name, fontWeight = FontWeight.Bold)
-                                Text("${asset.symbol} • ${asset.assetType} • ${asset.exchange}")
+                                Text("${asset.symbol} • ${asset.assetType} • ${asset.exchange} • ${currency}")
+                                TextButton(onClick = {
+                                    selectedAsset = null
+                                    searchQuery = ""
+                                    name = ""
+                                    symbol = ""
+                                    market = ""
+                                    assetType = "Investment"
+                                }) {
+                                    Text("Choose a different investment")
+                                }
                             }
                         }
                     }
 
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Investment name") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = symbol,
-                        onValueChange = { symbol = it.uppercase(Locale.US) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Ticker / market symbol") },
-                        placeholder = { Text("APN.JO, AAPL, BTC-USD, USDZAR=X…") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = market,
-                        onValueChange = { market = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Market / exchange") },
-                        singleLine = true
-                    )
+                    if (selectedAsset == null && !manualMode) {
+                        TextButton(onClick = {
+                            manualMode = true
+                            suggestions = emptyList()
+                        }) {
+                            Text("Can't find it? Enter manually")
+                        }
+                    }
 
-                    Text("Instrument currency", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
-                    AppSettings.supportedCurrencies.chunked(5).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            row.forEach { c ->
-                                FilterChip(
-                                    selected = c == currency,
-                                    onClick = { currency = c },
-                                    label = { Text(c) }
-                                )
+                    if (manualMode) {
+                        Text("Manual investment details", fontWeight = FontWeight.Bold)
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Investment name") },
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = symbol,
+                            onValueChange = { symbol = it.uppercase(Locale.US) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Ticker / market symbol") },
+                            placeholder = { Text("APN.JO, AAPL, BTC-USD, USDZAR=X…") },
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = market,
+                            onValueChange = { market = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Market / exchange") },
+                            singleLine = true
+                        )
+                        Text("Market price currency", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                        AppSettings.supportedCurrencies.chunked(5).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                row.forEach { ccy ->
+                                    FilterChip(
+                                        selected = ccy == currency,
+                                        onClick = { currency = ccy },
+                                        label = { Text(ccy) }
+                                    )
+                                }
                             }
                         }
+                        TextButton(onClick = {
+                            manualMode = false
+                            searchQuery = ""
+                        }) { Text("Back to search") }
                     }
 
                     OutlinedTextField(

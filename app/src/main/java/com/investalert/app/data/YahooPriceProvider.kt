@@ -14,18 +14,32 @@ object YahooPriceProvider {
         val currency: String,
         val dayChangePercent: Double?,
         val fetchedAtEpochMs: Long,
-        val source: String = "Yahoo Finance (may be delayed)"
+        val source: String = "Public market feed (may be delayed)"
     )
 
     suspend fun fetchPrice(symbol: String): Quote = withContext(Dispatchers.IO) {
+        val hosts = listOf("query1.finance.yahoo.com", "query2.finance.yahoo.com")
+        var lastError: Throwable? = null
+        for (host in hosts) {
+            try {
+                return@withContext fetchFromHost(host, symbol)
+            } catch (t: Throwable) {
+                lastError = t
+            }
+        }
+        throw IllegalStateException(lastError?.message ?: "Price unavailable for $symbol")
+    }
+
+    private fun fetchFromHost(host: String, symbol: String): Quote {
         val encoded = URLEncoder.encode(symbol.trim(), Charsets.UTF_8.name())
-        val url = URL("https://query1.finance.yahoo.com/v8/finance/chart/$encoded?interval=1m&range=1d")
+        val url = URL("https://$host/v8/finance/chart/$encoded?interval=1m&range=1d")
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            setRequestProperty("User-Agent", "Mozilla/5.0 InvestAlert/1.0")
+            connectTimeout = 7_000
+            readTimeout = 7_000
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) InvestAlert/1.4")
             setRequestProperty("Accept", "application/json")
+            setRequestProperty("Accept-Language", "en-ZA,en;q=0.9")
         }
 
         try {
@@ -57,7 +71,13 @@ object YahooPriceProvider {
                 (price / previousClose - 1.0) * 100.0
             } else null
 
-            Quote(symbol, price, currency.uppercase(), dayChangePercent, System.currentTimeMillis())
+            return Quote(
+                symbol = symbol,
+                price = price,
+                currency = currency.uppercase(),
+                dayChangePercent = dayChangePercent,
+                fetchedAtEpochMs = System.currentTimeMillis()
+            )
         } finally {
             connection.disconnect()
         }

@@ -69,6 +69,7 @@ class HoldingStore(context: Context) {
         put("highAlert", h.highAlert ?: JSONObject.NULL)
         put("enabled", h.enabled)
         put("lastPrice", h.lastPrice ?: JSONObject.NULL)
+        put("dayChangePercent", h.dayChangePercent ?: JSONObject.NULL)
         put("lastUpdatedEpochMs", h.lastUpdatedEpochMs ?: JSONObject.NULL)
         put("lowTriggered", h.lowTriggered)
         put("highTriggered", h.highTriggered)
@@ -90,6 +91,7 @@ class HoldingStore(context: Context) {
         highAlert = nullableDouble(o, "highAlert"),
         enabled = o.optBoolean("enabled", true),
         lastPrice = nullableDouble(o, "lastPrice"),
+        dayChangePercent = nullableDouble(o, "dayChangePercent"),
         lastUpdatedEpochMs = nullableLong(o, "lastUpdatedEpochMs"),
         lowTriggered = o.optBoolean("lowTriggered", false),
         highTriggered = o.optBoolean("highTriggered", false),

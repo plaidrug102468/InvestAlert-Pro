@@ -55,7 +55,15 @@ jobs:
           fi
           gh api -H "Accept: application/octet-stream" "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}" > "$HOME/.android/debug.keystore"
           chmod 600 "$HOME/.android/debug.keystore"
-          echo "Permanent InvestAlert signing identity loaded."
+          CERT_SHA="$(keytool -exportcert -alias androiddebugkey -keystore "$HOME/.android/debug.keystore" -storepass android | sha256sum | awk '{print $1}')"
+          EXPECTED_SHA="d37db075071518ff1679d691dcf6ca0dc137c1f4f5e438198c80180f88c11865"
+          if [ "$CERT_SHA" != "$EXPECTED_SHA" ]; then
+            echo "Signing certificate mismatch; refusing to build."
+            echo "Expected: $EXPECTED_SHA"
+            echo "Actual:   $CERT_SHA"
+            exit 1
+          fi
+          echo "Permanent InvestAlert signing identity verified."
 
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace

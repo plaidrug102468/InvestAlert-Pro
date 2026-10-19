@@ -73,5 +73,5 @@ jobs:
           if gh release view v1.4 >/dev/null 2>&1; then
             gh release upload v1.4 InvestAlert-Pro-v1.4.apk --clobber
           else
-            gh release create v1.4 InvestAlert-Pro-v1.4.apk               --title "InvestAlert Pro v1.4"               --notes "InvestAlert Pro v1.4 Android APK. Updates v1.3 in place; fixes investment search suggestions, simplified add flow, clearer portfolio cards, multi-currency totals and expanded Trader Pro scans."
+            gh release create v1.4 InvestAlert-Pro-v1.4.apk               --title "InvestAlert Pro v1.4"               --notes "InvestAlert Pro v1.4 Android APK. Updates v1.4 in place; fixes investment search suggestions, simplified add flow, clearer portfolio cards, multi-currency totals and expanded Trader Pro scans."
           fi

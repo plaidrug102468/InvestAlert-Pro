@@ -23,9 +23,14 @@ object TraderProEngine {
         val reasons: List<String>,
         val sma20: Double?,
         val sma50: Double?,
+        val sma200: Double?,
         val rsi14: Double?,
         val momentum30: Double?,
-        val volatility30: Double?
+        val momentum90: Double?,
+        val volatility30: Double?,
+        val yearLow: Double?,
+        val yearHigh: Double?,
+        val chartPrices: List<Double> = emptyList()
     )
 
     data class AssistantReply(
@@ -41,7 +46,12 @@ object TraderProEngine {
     private val cryptoUniverse = listOf("BTC-USD","ETH-USD","SOL-USD","XRP-USD","BNB-USD","ADA-USD","DOGE-USD","SHIB-USD","LINK-USD","AVAX-USD")
     private val forexUniverse = listOf("USDZAR=X","EURZAR=X","GBPZAR=X","EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCHF=X")
 
-    suspend fun answer(question: String, holdings: List<Holding>): AssistantReply = withContext(Dispatchers.IO) {
+    suspend fun answer(
+        question: String,
+        holdings: List<Holding>,
+        attachments: List<TraderAttachment> = emptyList()
+    ): AssistantReply = withContext(Dispatchers.IO) {
+        val attachmentText = attachments.joinToString("\n\n") { it.summary }.take(18000)
         val q = question.trim().lowercase(Locale.US)
         if (q.isBlank()) return@withContext AssistantReply("Trader Pro","Ask about your portfolio, a holding, market risk, or market opportunities.")
 
@@ -54,7 +64,23 @@ object TraderProEngine {
             runCatching { AssetSearchProvider.search(question, 5).firstOrNull() }.getOrNull()
         } else null
 
+        val attachmentAsset = if (attachments.isNotEmpty()) {
+            val parsed = InvestmentScreenshotParser.parse(attachmentText, "ZAR")
+            val query = parsed.detectedSymbol ?: parsed.detectedName ?: parsed.query
+            if (query.isNotBlank()) {
+                runCatching {
+                    val matches = AssetSearchProvider.search(query, 8)
+                    AssetSearchProvider.bestScreenshotMatch(parsed, matches) ?: matches.firstOrNull()
+                }.getOrNull()
+            } else null
+        } else null
+
+        val comparisonAssets = if (q.contains("compare") || q.contains(" vs ") || q.contains(" versus ")) {
+            discoverComparisonAssets(question)
+        } else emptyList()
+
         when {
+            comparisonAssets.size >= 2 -> compareAssets(comparisonAssets.take(3))
             matched != null -> {
                 val a = runCatching { analyzeSymbol(matched.symbol) }.getOrNull()
                 if (a == null) AssistantReply("${matched.name} review","Recent market history is unavailable right now.")
@@ -74,6 +100,8 @@ object TraderProEngine {
                     )
                 }
             }
+            attachmentAsset != null && (q.contains("this") || q.contains("attachment") || q.contains("file") || q.contains("screenshot") || q.contains("analyse") || q.contains("analyze") || question.isBlank()) ->
+                analyzeAttachment(attachmentAsset, attachments)
             discovered != null -> analyzeDiscovered(discovered)
             q.contains("sell") || q.contains("reduce") || q.contains("worst") -> sellReview(holdings)
             q.contains("portfolio") || q.contains("risk") || q.contains("divers") -> portfolioReview(holdings)
@@ -82,9 +110,10 @@ object TraderProEngine {
             q.contains("jse") || q.contains("south africa") -> scan(jseUniverse, holdings, "JSE market scan")
             q.contains("us") || q.contains("america") || q.contains("nasdaq") -> scan(usUniverse, holdings, "US market scan")
             q.contains("best") || q.contains("buy") || q.contains("opportun") || q.contains("invest") -> scan(jseUniverse.take(6)+usUniverse.take(6)+cryptoUniverse.take(4), holdings, "Cross-market scan")
+            attachments.isNotEmpty() -> attachmentSummary(attachments)
             else -> AssistantReply(
                 "Trader Pro",
-                "I can analyse a specific holding, review portfolio risk, or scan a watch universe using trend, momentum, RSI and volatility."
+                "Ask me to analyse a stock, forex pair or cryptocurrency; compare investments; explain a market move; review your portfolio; scan opportunities; or attach a screenshot, PDF, CSV or text statement."
             )
         }
     }
@@ -229,6 +258,7 @@ object TraderProEngine {
                 rangePosition <= 15 -> "Price is near its 52-week low; treat this as a recovery/risk situation rather than a bargain by default."
                 else -> "Price is around ${fmt1(rangePosition)}% of its 52-week range."
             }
+            reasons += "Approximate 52-week range: ${fmtPrice(yearLow)} to ${fmtPrice(yearHigh)}."
         }
 
         score = score.coerceIn(0,100)
@@ -245,7 +275,101 @@ object TraderProEngine {
             else -> "Low-medium"
         }
 
-        return Analysis(symbol,price,s.second,score,stance,confidence,reasons,sma20,sma50,rsi,momentum30,vol)
+        return Analysis(
+            symbol = symbol,
+            price = price,
+            currency = s.second,
+            score = score,
+            stance = stance,
+            confidence = confidence,
+            reasons = reasons,
+            sma20 = sma20,
+            sma50 = sma50,
+            sma200 = sma200,
+            rsi14 = rsi,
+            momentum30 = momentum30,
+            momentum90 = momentum90,
+            volatility30 = vol,
+            yearLow = yearLow,
+            yearHigh = yearHigh,
+            chartPrices = closes.takeLast(minOf(90, closes.size))
+        )
+    }
+
+    private suspend fun analyzeAttachment(
+        asset: AssetSuggestion,
+        attachments: List<TraderAttachment>
+    ): AssistantReply {
+        val base = analyzeDiscovered(asset)
+        val names = attachments.joinToString(", ") { it.name }
+        return base.copy(
+            body = "I read $names and matched the content to ${asset.name} (${asset.symbol}). " + base.body
+        )
+    }
+
+    private fun attachmentSummary(attachments: List<TraderAttachment>): AssistantReply {
+        val readable = attachments.filter { it.extractedText.isNotBlank() }
+        val unsupported = attachments.filter { it.extractedText.isBlank() }
+        val body = buildString {
+            if (readable.isNotEmpty()) {
+                append("I read: ")
+                append(readable.joinToString { "${it.name} (${it.kind})" })
+                append(". Ask me to analyse the investment, compare it with another asset, explain figures, or review risk.")
+            }
+            if (unsupported.isNotEmpty()) {
+                if (isNotEmpty()) append(" ")
+                append("I couldn't extract text from: ")
+                append(unsupported.joinToString { it.name })
+                append(". Images, PDFs, CSV, TXT and JSON work best in this build.")
+            }
+        }
+        return AssistantReply("Attachment ready", body.ifBlank { "Attachment received." })
+    }
+
+    private suspend fun discoverComparisonAssets(question: String): List<AssetSuggestion> {
+        val cleaned = question
+            .replace("compare", " ", ignoreCase = true)
+            .replace("versus", " vs ", ignoreCase = true)
+            .replace("with", " vs ", ignoreCase = true)
+        val parts = cleaned.split(Regex("""\s+vs\s+|\s+and\s+|,""", RegexOption.IGNORE_CASE))
+            .map { it.trim().trim('?', '.', ':', ';') }
+            .filter { it.length >= 2 }
+            .take(3)
+
+        val out = mutableListOf<AssetSuggestion>()
+        for (part in parts) {
+            runCatching { AssetSearchProvider.search(part, 5).firstOrNull() }
+                .getOrNull()
+                ?.let { if (out.none { a -> a.symbol.equals(it.symbol, true) }) out += it }
+        }
+        return out
+    }
+
+    private suspend fun compareAssets(assets: List<AssetSuggestion>): AssistantReply {
+        val analyses = mutableListOf<Analysis>()
+        for (asset in assets) {
+            runCatching { analyzeSymbol(asset.symbol) }.getOrNull()?.let { analyses += it }
+            delay(80)
+        }
+        if (analyses.size < 2) {
+            return AssistantReply("Comparison", "I couldn't retrieve enough comparable market history right now.")
+        }
+        val ranked = analyses.sortedByDescending { it.score }
+        val body = buildString {
+            append("Current technical ranking: ")
+            append(ranked.joinToString("; ") { "${it.symbol} ${it.score}/100 (${it.stance})" })
+            append(". ")
+            val leader = ranked.first()
+            append("${leader.symbol} currently has the strongest combined trend/momentum score. ")
+            append("Compare this with valuation, fees, taxes, fundamentals and your time horizon before acting.")
+        }
+        return AssistantReply("Investment comparison", body, ranked)
+    }
+
+    private fun fmtPrice(v: Double): String = when {
+        kotlin.math.abs(v) < 0.0001 -> String.format(Locale.US, "%.8f", v)
+        kotlin.math.abs(v) < 1.0 -> String.format(Locale.US, "%.4f", v)
+        else -> String.format(Locale.US, "%.2f", v)
     }
 
     private fun fetchHistory(symbol: String): Triple<String,String,List<Double>> {

@@ -452,7 +452,7 @@ private fun HoldingCard(
                 Column(Modifier.weight(1f)) {
                     Text(holding.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "${holding.symbol} • ${holding.market} • ${holding.currency}",
+                        "${holding.symbol} • ${holding.assetType} • ${holding.market} • ${holding.currency}",
                         style = MaterialTheme.typography.labelMedium
                     )
                     if (holding.whereHeld.isNotBlank()) {
@@ -698,13 +698,14 @@ private fun InvestmentDialog(
     var selectedAsset by remember(initial?.id) {
         mutableStateOf(
             initial?.let {
-                AssetSuggestion(it.symbol, it.name, it.market, "Investment", it.currency)
+                AssetSuggestion(it.symbol, it.name, it.market, it.assetType, it.currency)
             }
         )
     }
     var name by remember(initial?.id) { mutableStateOf(initial?.name ?: "") }
     var symbol by remember(initial?.id) { mutableStateOf(initial?.symbol ?: "") }
     var market by remember(initial?.id) { mutableStateOf(initial?.market ?: "") }
+    var assetType by remember(initial?.id) { mutableStateOf(initial?.assetType ?: "Investment") }
     var currency by remember(initial?.id) { mutableStateOf(initial?.currency ?: "USD") }
     var investedCurrency by remember(initial?.id) { mutableStateOf(initial?.investedCurrency ?: baseCurrency) }
     var whereHeld by remember(initial?.id) { mutableStateOf(initial?.whereHeld ?: "") }
@@ -793,6 +794,7 @@ private fun InvestmentDialog(
                                                 name = suggestion.name
                                                 symbol = suggestion.symbol
                                                 market = suggestion.exchange
+                                                assetType = suggestion.assetType
                                                 suggestion.currency?.let { currency = if (it.equals("ZAc", true)) "ZAR" else it.uppercase(Locale.US) }
                                                 suggestions = emptyList()
                                             }
@@ -971,6 +973,7 @@ private fun InvestmentDialog(
                                         name = name.trim(),
                                         symbol = symbol.trim().uppercase(Locale.US),
                                         market = market.trim().ifBlank { "Market" },
+                                        assetType = assetType,
                                         whereHeld = whereHeld.trim(),
                                         units = units!!,
                                         investedAmount = invested!!,

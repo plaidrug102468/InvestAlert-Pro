@@ -36,7 +36,9 @@ object TraderProEngine {
     )
 
     private val usUniverse = listOf("MSFT","AAPL","GOOGL","AMZN","NVDA","META","JPM","V","BRK-B","TSLA")
-    private val jseUniverse = listOf("NPN.JO","SOL.JO","FSR.JO","SBK.JO","AGL.JO","ANG.JO","BTI.JO","CPI.JO","APN.JO","MTN.JO")
+    private val jseUniverse = listOf("NPN.JO","SOL.JO","FSR.JO","SBK.JO","AGL.JO","ANG.JO","BTI.JO","CPI.JO","APN.JO","MTN.JO","BID.JO","SHP.JO")
+    private val cryptoUniverse = listOf("BTC-USD","ETH-USD","SOL-USD","XRP-USD","BNB-USD","ADA-USD","DOGE-USD","SHIB-USD","LINK-USD","AVAX-USD")
+    private val forexUniverse = listOf("USDZAR=X","EURZAR=X","GBPZAR=X","EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCHF=X")
 
     suspend fun answer(question: String, holdings: List<Holding>): AssistantReply = withContext(Dispatchers.IO) {
         val q = question.trim().lowercase(Locale.US)
@@ -59,15 +61,36 @@ object TraderProEngine {
                     listOf(a)
                 )
             }
+            q.contains("sell") || q.contains("reduce") || q.contains("worst") -> sellReview(holdings)
             q.contains("portfolio") || q.contains("risk") || q.contains("divers") -> portfolioReview(holdings)
+            q.contains("crypto") || q.contains("coin") || q.contains("bitcoin") -> scan(cryptoUniverse, holdings, "Crypto market scan")
+            q.contains("forex") || q.contains("currency") || q.contains("fx") -> scan(forexUniverse, holdings, "Forex market scan")
             q.contains("jse") || q.contains("south africa") -> scan(jseUniverse, holdings, "JSE market scan")
-            q.contains("us") || q.contains("america") -> scan(usUniverse, holdings, "US market scan")
-            q.contains("best") || q.contains("opportun") || q.contains("invest") -> scan(jseUniverse.take(6)+usUniverse.take(6), holdings, "Market scan")
+            q.contains("us") || q.contains("america") || q.contains("nasdaq") -> scan(usUniverse, holdings, "US market scan")
+            q.contains("best") || q.contains("buy") || q.contains("opportun") || q.contains("invest") -> scan(jseUniverse.take(6)+usUniverse.take(6)+cryptoUniverse.take(4), holdings, "Cross-market scan")
             else -> AssistantReply(
                 "Trader Pro",
                 "I can analyse a specific holding, review portfolio risk, or scan a watch universe using trend, momentum, RSI and volatility."
             )
         }
+    }
+
+    private suspend fun sellReview(holdings: List<Holding>): AssistantReply {
+        if (holdings.isEmpty()) return AssistantReply("Sell / reduce review", "Add investments first so I can review your actual portfolio.")
+        val analyses = mutableListOf<Analysis>()
+        for (holding in holdings.filter { it.enabled }.take(12)) {
+            runCatching { analyzeSymbol(holding.symbol) }.getOrNull()?.let { analyses += it }
+            delay(80)
+        }
+        val weakest = analyses.sortedBy { it.score }.take(5)
+        if (weakest.isEmpty()) return AssistantReply("Sell / reduce review", "I couldn't retrieve enough market history to review your holdings right now.")
+        return AssistantReply(
+            "Sell / reduce review",
+            "These holdings currently have the weakest technical/risk scores: " +
+                weakest.joinToString("; ") { "${it.symbol} ${it.score}/100 (${it.stance})" } +
+                ". Treat this as a review list, not an automatic sell instruction; consider your original reason for owning each position, fees, tax and time horizon.",
+            weakest
+        )
     }
 
     private suspend fun portfolioReview(holdings: List<Holding>): AssistantReply {

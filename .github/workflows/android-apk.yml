@@ -66,16 +66,16 @@ jobs:
           echo "Permanent InvestAlert signing identity verified."
 
       - name: Build APK
-        run: gradle --no-daemon :app:assembleDebug --stacktrace
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.5.3.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.5.4.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InvestAlert-Pro-v1.5.3
-          path: InvestAlert-Pro-v1.5.3.apk
+          name: InvestAlert-Pro-v1.5.4
+          path: InvestAlert-Pro-v1.5.4.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -83,8 +83,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.5.3 >/dev/null 2>&1; then
-            gh release upload v1.5.3 InvestAlert-Pro-v1.5.3.apk --clobber
+          if gh release view v1.5.4 >/dev/null 2>&1; then
+            gh release upload v1.5.4 InvestAlert-Pro-v1.5.4.apk --clobber
           else
-            gh release create v1.5.3 InvestAlert-Pro-v1.5.3.apk               --title "InvestAlert Pro v1.5.3"               --notes "InvestAlert Pro v1.5.3. Improves EasyEquities screenshot import including FSR fractional shares, fixes accent colors in dark mode, adds Allan Gray funds and AMETFs, and supports manual values for managed unit trusts."
+            gh release create v1.5.4 InvestAlert-Pro-v1.5.4.apk               --title "InvestAlert Pro v1.5.4"               --notes "InvestAlert Pro v1.5.4. Rebuilds screenshot import around OCR layout positions, fixes false zero readings, improves EasyEquities Shares + FSR parsing, and adds regression tests for the Aspen screenshot."
           fi

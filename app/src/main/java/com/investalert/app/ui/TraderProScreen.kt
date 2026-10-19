@@ -237,7 +237,7 @@ fun TraderProScreen(
             }
         }
         Text(
-            "Attachments supported: screenshots/images, PDF statements, CSV, TXT and JSON.",
+            "Attachments supported: screenshots/images, PDF, CSV, TXT, JSON, DOCX, XLSX and PPTX.",
             style = MaterialTheme.typography.labelSmall
         )
 

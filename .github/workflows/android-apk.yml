@@ -61,13 +61,13 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.5.1.1.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.5.1.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InvestAlert-Pro-v1.5.1.1
-          path: InvestAlert-Pro-v1.5.1.1.apk
+          name: InvestAlert-Pro-v1.5.1
+          path: InvestAlert-Pro-v1.5.1.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -76,7 +76,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view v1.5.1 >/dev/null 2>&1; then
-            gh release upload v1.5.1 InvestAlert-Pro-v1.5.1.1.apk --clobber
+            gh release upload v1.5.1 InvestAlert-Pro-v1.5.1.apk --clobber
           else
-            gh release create v1.5.1 InvestAlert-Pro-v1.5.1.1.apk               --title "InvestAlert Pro v1.5.1.1"               --notes "InvestAlert Pro v1.5.1.1. Updates v1.4 in place with screenshot import, themes, dropdown currencies, watchlist, transaction history, news links, configurable alerts and morning brief."
+            gh release create v1.5.1 InvestAlert-Pro-v1.5.1.apk               --title "InvestAlert Pro v1.5.1"               --notes "InvestAlert Pro v1.5.1. Stable baseline build with screenshot import, themes, dropdown currencies, watchlist, transaction history, news links, configurable alerts and morning brief."
           fi

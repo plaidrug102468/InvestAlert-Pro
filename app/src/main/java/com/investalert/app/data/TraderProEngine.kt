@@ -32,7 +32,8 @@ object TraderProEngine {
         val title: String,
         val body: String,
         val analyses: List<Analysis> = emptyList(),
-        val sourceNote: String = "Market research only. Data can be delayed or unavailable."
+        val links: List<NewsItem> = emptyList(),
+        val sourceNote: String = "Market research only. Prices and headlines can be delayed; verify important decisions."
     )
 
     private val usUniverse = listOf("MSFT","AAPL","GOOGL","AMZN","NVDA","META","JPM","V","BRK-B","TSLA","AVGO","COST","NFLX","AMD","LLY")
@@ -53,20 +54,18 @@ object TraderProEngine {
                 val a = runCatching { analyzeSymbol(matched.symbol) }.getOrNull()
                 if (a == null) AssistantReply("${matched.name} review","Recent market history is unavailable right now.")
                 else {
-                    val headlines = runCatching {
-                        NewsResearchProvider.headlines("${matched.name} ${matched.symbol}", 3)
+                    val news = runCatching {
+                        NewsResearchProvider.news("${matched.name} ${matched.symbol}", 4)
                     }.getOrDefault(emptyList())
                     AssistantReply(
-                        "${matched.name} • ${matched.symbol}",
-                        buildString {
+                        title = "${matched.name} • ${matched.symbol}",
+                        body = buildString {
                             append("${a.stance} • score ${a.score}/100 • ${a.confidence} confidence. ")
                             append(a.reasons.joinToString(" "))
-                            if (headlines.isNotEmpty()) {
-                                append("\n\nRecent headlines to review:\n")
-                                headlines.forEach { append("• ").append(it).append("\n") }
-                            }
+                            if (news.isNotEmpty()) append(" Recent related news is linked below.")
                         },
-                        listOf(a)
+                        analyses = listOf(a),
+                        links = news
                     )
                 }
             }

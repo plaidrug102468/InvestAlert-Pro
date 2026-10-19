@@ -48,7 +48,7 @@ fun TraderProScreen(
     attachmentBusy: Boolean,
     onAttach: () -> Unit,
     onRemoveAttachment: (Int) -> Unit,
-    onAskTrader: (String, List<TraderAttachment>, (TraderProEngine.AssistantReply) -> Unit) -> Unit
+    onAskTrader: (String, List<TraderAttachment>, String, (TraderProEngine.AssistantReply) -> Unit) -> Unit
 ) {
     var question by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
@@ -62,9 +62,20 @@ fun TraderProScreen(
         question = ""
         val sentAttachments = attachments.toList()
         val displayPrompt = prompt.ifBlank { "Analyse these attachments" }
+        val context = turns.takeLast(6).joinToString("\n") { turn ->
+            buildString {
+                append("User: ").append(turn.question)
+                turn.reply?.let {
+                    append("\nTrader Pro: ").append(it.title).append(" — ").append(it.body)
+                    if (it.analyses.isNotEmpty()) {
+                        append(" Symbols: ").append(it.analyses.joinToString { a -> a.symbol })
+                    }
+                }
+            }
+        }
         val index = turns.size
         turns = turns + ChatTurn(displayPrompt, sentAttachments.map { it.name }, null)
-        onAskTrader(displayPrompt, sentAttachments) { reply ->
+        onAskTrader(displayPrompt, sentAttachments, context) { reply ->
             val updated = turns.toMutableList()
             if (index in updated.indices) updated[index] = ChatTurn(displayPrompt, sentAttachments.map { it.name }, reply)
             turns = updated

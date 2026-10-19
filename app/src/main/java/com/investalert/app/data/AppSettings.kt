@@ -41,7 +41,7 @@ class AppSettings(context: Context) {
 
     fun seenNews(): Set<String> = prefs.getStringSet(KEY_SEEN_NEWS, emptySet()) ?: emptySet()
     fun addSeenNews(keys: Collection<String>) {
-        val merged = (seenNews() + keys).takeLast(250).toSet()
+        val merged = (seenNews() + keys).toList().takeLast(250).toSet()
         prefs.edit().putStringSet(KEY_SEEN_NEWS, merged).apply()
     }
 

@@ -90,11 +90,14 @@ object AssetSearchProvider {
                             name = item.optString("longname").ifBlank {
                                 item.optString("shortname").ifBlank { symbol }
                             },
-                            exchange = item.optString("exchDisp").ifBlank {
-                                item.optString("exchange").ifBlank { "Market" }
-                            },
+                            exchange = normalizeExchange(
+                                item.optString("exchDisp").ifBlank {
+                                    item.optString("exchange").ifBlank { "Market" }
+                                },
+                                type
+                            ),
                             assetType = normalizeType(type),
-                            currency = item.optString("currency").ifBlank { null }
+                            currency = item.optString("currency").ifBlank { inferCurrency(symbol, type) }
                         )
                     )
                 }
@@ -102,6 +105,23 @@ object AssetSearchProvider {
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun inferCurrency(symbol: String, rawType: String): String? {
+        val upper = symbol.uppercase(Locale.US)
+        return when {
+            upper.endsWith(".JO") -> "ZAR"
+            upper.contains("-USD") -> "USD"
+            upper.endsWith("=X") && upper.length >= 7 -> upper.substring(3, 6)
+            rawType.equals("CRYPTOCURRENCY", true) -> "USD"
+            else -> null
+        }
+    }
+
+    private fun normalizeExchange(raw: String, rawType: String): String = when {
+        rawType.equals("CRYPTOCURRENCY", true) || raw.equals("CCC", true) -> "Crypto"
+        rawType.equals("CURRENCY", true) || raw.equals("CCY", true) -> "Forex"
+        else -> raw
     }
 
     private fun normalizeType(raw: String): String = when (raw.uppercase(Locale.US)) {

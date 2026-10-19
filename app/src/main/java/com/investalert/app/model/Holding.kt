@@ -5,6 +5,7 @@ data class Holding(
     val name: String,
     val symbol: String,
     val market: String,
+    val assetType: String,
     val whereHeld: String,
     val units: Double,
     val investedAmount: Double,

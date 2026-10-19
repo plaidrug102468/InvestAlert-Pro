@@ -69,13 +69,13 @@ jobs:
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.6.0.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.6.1.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InvestAlert-Pro-v1.6.0
-          path: InvestAlert-Pro-v1.6.0.apk
+          name: InvestAlert-Pro-v1.6.1
+          path: InvestAlert-Pro-v1.6.1.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -83,8 +83,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.6.0 >/dev/null 2>&1; then
-            gh release upload v1.6.0 InvestAlert-Pro-v1.6.0.apk --clobber
+          if gh release view v1.6.1 >/dev/null 2>&1; then
+            gh release upload v1.6.1 InvestAlert-Pro-v1.6.1.apk --clobber
           else
-            gh release create v1.6.0 InvestAlert-Pro-v1.6.0.apk               --title "InvestAlert Pro v1.6.0"               --notes "InvestAlert Pro v1.6.0. Trader Pro upgrade: inline market charts, multi-file/image/PDF/CSV/TXT attachments with OCR, deeper technical metrics, comparisons, attachment analysis, news links and conversational follow-up context."
+            gh release create v1.6.1 InvestAlert-Pro-v1.6.1.apk               --title "InvestAlert Pro v1.6.1"               --notes "InvestAlert Pro v1.6.1. Fixes Trader Pro natural-language intent routing so broad questions such as top investments today trigger a diversified market scan instead of a random ticker lookup. Adds specific asset mention detection and recent-news links for top candidates."
           fi

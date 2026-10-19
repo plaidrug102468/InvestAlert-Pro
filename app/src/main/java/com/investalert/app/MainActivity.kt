@@ -551,9 +551,9 @@ private fun TraderProScreen(
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Trader Pro", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Portfolio-aware market analysis that runs without a paid AI or API key.")
+                Text("A focused market research assistant for your portfolio and watchlist.")
                 Text(
-                    "Uses technical signals and public market data. It can be wrong; treat recommendations as research, not certainty.",
+                    "Combines trend, momentum, volatility, portfolio context and recent public headlines. Signals are research, not guarantees.",
                     style = MaterialTheme.typography.labelSmall
                 )
             }
@@ -569,7 +569,27 @@ private fun TraderProScreen(
             FilterChip(
                 selected = false,
                 onClick = { ask("Best JSE opportunities to research") },
-                label = { Text("JSE ideas") },
+                label = { Text("JSE") },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = false,
+                onClick = { ask("Best US opportunities to research") },
+                label = { Text("US") },
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            FilterChip(
+                selected = false,
+                onClick = { ask("Best crypto opportunities to research") },
+                label = { Text("Crypto") },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = false,
+                onClick = { ask("Best forex opportunities to research") },
+                label = { Text("Forex") },
                 modifier = Modifier.weight(1f)
             )
             FilterChip(
@@ -609,11 +629,14 @@ private fun TraderProScreen(
                         }
                         Text("${a.stance} • ${a.confidence} confidence")
                         Text(
-                            "Price ${money(a.price, a.currency)}" +
+                            "Price ${priceMoney(a.price, a.currency)}" +
                                 (a.rsi14?.let { " • RSI ${String.format(Locale.US, "%.1f", it)}" } ?: "") +
                                 (a.momentum30?.let { " • 30d ${signedPct(it)}" } ?: ""),
                             style = MaterialTheme.typography.labelMedium
                         )
+                        a.reasons.take(3).forEach { reason ->
+                            Text("• $reason", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     Text(result.sourceNote, style = MaterialTheme.typography.labelSmall)
                 }

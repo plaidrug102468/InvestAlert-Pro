@@ -48,7 +48,7 @@ jobs:
           else
             keytool -genkeypair               -keystore "$HOME/.android/debug.keystore"               -storepass android               -alias androiddebugkey               -keypass android               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=Android Debug,O=InvestAlert Development,C=ZA"
             cp "$HOME/.android/debug.keystore" /tmp/investalert-debug.keystore
-            gh release create investalert-signing /tmp/investalert-debug.keystore               --title "InvestAlert signing identity"               --notes "Private draft release used only to preserve the signing identity for InvestAlert updates."               --draft
+            gh release create investalert-signing /tmp/investalert-debug.keystore               --title "InvestAlert signing identity"               --notes "InvestAlert Pro v1.5. Updates v1.4 in place with screenshot import, themes, dropdown currencies, watchlist, transaction history, news links, configurable alerts and morning brief."               --draft
           fi
           chmod 600 "$HOME/.android/debug.keystore"
 
@@ -56,13 +56,13 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.4.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.5.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InvestAlert-Pro-v1.4
-          path: InvestAlert-Pro-v1.4.apk
+          name: InvestAlert-Pro-v1.5
+          path: InvestAlert-Pro-v1.5.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -70,8 +70,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.4 >/dev/null 2>&1; then
-            gh release upload v1.4 InvestAlert-Pro-v1.4.apk --clobber
+          if gh release view v1.5 >/dev/null 2>&1; then
+            gh release upload v1.5 InvestAlert-Pro-v1.5.apk --clobber
           else
-            gh release create v1.4 InvestAlert-Pro-v1.4.apk               --title "InvestAlert Pro v1.4"               --notes "InvestAlert Pro v1.4 Android APK. Updates v1.4 in place; fixes investment search suggestions, simplified add flow, clearer portfolio cards, multi-currency totals and expanded Trader Pro scans."
+            gh release create v1.5 InvestAlert-Pro-v1.5.apk               --title "InvestAlert Pro v1.5"               --notes "InvestAlert Pro v1.5. Updates v1.4 in place with screenshot import, themes, dropdown currencies, watchlist, transaction history, news links, configurable alerts and morning brief."
           fi

@@ -52,14 +52,23 @@ object TraderProEngine {
             matched != null -> {
                 val a = runCatching { analyzeSymbol(matched.symbol) }.getOrNull()
                 if (a == null) AssistantReply("${matched.name} review","Recent market history is unavailable right now.")
-                else AssistantReply(
-                    "${matched.name} • ${matched.symbol}",
-                    buildString {
-                        append("${a.stance} • score ${a.score}/100 • ${a.confidence} confidence. ")
-                        append(a.reasons.joinToString(" "))
-                    },
-                    listOf(a)
-                )
+                else {
+                    val headlines = runCatching {
+                        NewsResearchProvider.headlines("${matched.name} ${matched.symbol}", 3)
+                    }.getOrDefault(emptyList())
+                    AssistantReply(
+                        "${matched.name} • ${matched.symbol}",
+                        buildString {
+                            append("${a.stance} • score ${a.score}/100 • ${a.confidence} confidence. ")
+                            append(a.reasons.joinToString(" "))
+                            if (headlines.isNotEmpty()) {
+                                append("\n\nRecent headlines to review:\n")
+                                headlines.forEach { append("• ").append(it).append("\n") }
+                            }
+                        },
+                        listOf(a)
+                    )
+                }
             }
             q.contains("sell") || q.contains("reduce") || q.contains("worst") -> sellReview(holdings)
             q.contains("portfolio") || q.contains("risk") || q.contains("divers") -> portfolioReview(holdings)

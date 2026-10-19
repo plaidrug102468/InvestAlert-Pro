@@ -69,6 +69,7 @@ fun InvestmentDialog(
     var whereHeld by remember(initial?.id) { mutableStateOf(initial?.whereHeld ?: "") }
     var unitsText by remember(initial?.id) { mutableStateOf(initial?.units?.takeIf { it > 0 }?.toString() ?: "") }
     var investedText by remember(initial?.id) { mutableStateOf(initial?.investedAmount?.takeIf { it > 0 }?.toString() ?: "") }
+    var manualCurrentValueText by remember(initial?.id) { mutableStateOf(initial?.manualCurrentValue?.takeIf { it >= 0 }?.toString() ?: "") }
     var lowText by remember(initial?.id) { mutableStateOf(initial?.lowAlert?.toString() ?: "") }
     var highText by remember(initial?.id) { mutableStateOf(initial?.highAlert?.toString() ?: "") }
     var enabled by remember(initial?.id) { mutableStateOf(initial?.enabled ?: true) }
@@ -104,6 +105,7 @@ fun InvestmentDialog(
         importedWholeUnits = draft.wholeUnits
         importedFractionalUnits = draft.fractionalUnits
         importedCurrentValue = draft.currentValue
+        draft.currentValue?.let { manualCurrentValueText = it.toString() }
         importedAveragePrice = draft.averagePurchasePrice
         importedPrice = draft.impliedCurrentPrice
         if (draft.query.isNotBlank()) {
@@ -304,6 +306,17 @@ fun InvestmentDialog(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true
                         )
+                        if (symbol.startsWith("AGF:") || assetType.equals("Unit Trust", true)) {
+                            OutlinedTextField(
+                                value = manualCurrentValueText,
+                                onValueChange = { manualCurrentValueText = numericInput(it) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Current value ($investedCurrency)") },
+                                supportingText = { Text("Managed-fund value; update from your latest statement or screenshot.") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true
+                            )
+                        }
                     }
 
                     Text("Price alerts", fontWeight = FontWeight.Bold)
@@ -339,6 +352,7 @@ fun InvestmentDialog(
                             val invested = if (watchOnly) 0.0 else investedText.toDoubleOrNull()
                             val low = lowText.takeIf { it.isNotBlank() }?.toDoubleOrNull()
                             val high = highText.takeIf { it.isNotBlank() }?.toDoubleOrNull()
+                            val manualCurrentValue = manualCurrentValueText.takeIf { it.isNotBlank() }?.toDoubleOrNull()
                             error = when {
                                 name.isBlank() -> "Choose or enter an investment."
                                 symbol.isBlank() -> "Ticker / symbol is required."
@@ -367,6 +381,7 @@ fun InvestmentDialog(
                                         enabled = enabled,
                                         watchOnly = watchOnly,
                                         lastPrice = initial?.lastPrice ?: importedPrice,
+                                        manualCurrentValue = if (symbol.startsWith("AGF:") || assetType.equals("Unit Trust", true)) manualCurrentValue else initial?.manualCurrentValue,
                                         dayChangePercent = initial?.dayChangePercent,
                                         lastUpdatedEpochMs = initial?.lastUpdatedEpochMs,
                                         lowTriggered = initial?.lowTriggered ?: false,

@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.zip.ZipInputStream
 
 object TraderAttachmentProcessor {
     suspend fun process(context: Context, uri: Uri): TraderAttachment = withContext(Dispatchers.IO) {
@@ -49,6 +50,10 @@ object TraderAttachmentProcessor {
                 name.endsWith(".json", true) -> {
                 val text = resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
                 TraderAttachment(name, mime.ifBlank { "text/plain" }, text.take(120_000), "Text")
+            }
+            isOfficeFile(name, mime) -> {
+                val text = resolver.openInputStream(uri)?.use { readOfficeXml(it.readBytes()) }.orEmpty()
+                TraderAttachment(name, mime, text.take(120_000), "Office document")
             }
             else -> {
                 TraderAttachment(
@@ -101,6 +106,50 @@ object TraderAttachmentProcessor {
         return out.toString().take(120_000)
     }
 
+
+    private fun isOfficeFile(name: String, mime: String): Boolean =
+        name.endsWith(".docx", true) ||
+            name.endsWith(".xlsx", true) ||
+            name.endsWith(".pptx", true) ||
+            mime.contains("openxmlformats", true)
+
+    private fun readOfficeXml(bytes: ByteArray): String {
+        val out = StringBuilder()
+        ZipInputStream(bytes.inputStream()).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val path = entry.name.lowercase()
+                val useful =
+                    path == "word/document.xml" ||
+                        path == "xl/sharedstrings.xml" ||
+                        path.startsWith("xl/worksheets/sheet") ||
+                        path.startsWith("ppt/slides/slide")
+                if (useful && !entry.isDirectory) {
+                    val xml = zip.readBytes().toString(Charsets.UTF_8)
+                    val text = xml
+                        .replace(Regex("""<w:tab[^>]*/>"""), "\t")
+                        .replace(Regex("""</w:p>|</a:p>|</row>"""), "\n")
+                        .replace(Regex("""<[^>]+>"""), " ")
+                        .replace("&amp;", "&")
+                        .replace("&lt;", "<")
+                        .replace("&gt;", ">")
+                        .replace("&quot;", "\"")
+                        .replace("&apos;", "'")
+                        .replace(Regex("""[ \t]+"""), " ")
+                        .replace(Regex("""\n\s+"""), "\n")
+                        .trim()
+                    if (text.isNotBlank()) {
+                        out.append("\n--- ").append(entry.name).append(" ---\n")
+                        out.append(text).append('\n')
+                    }
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+        return out.toString()
+    }
+
     private fun queryName(context: Context, uri: Uri): String {
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -116,6 +165,9 @@ object TraderAttachmentProcessor {
         name.endsWith(".csv", true) -> "text/csv"
         name.endsWith(".txt", true) -> "text/plain"
         name.endsWith(".json", true) -> "application/json"
+        name.endsWith(".docx", true) -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        name.endsWith(".xlsx", true) -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        name.endsWith(".pptx", true) -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         name.endsWith(".png", true) -> "image/png"
         name.endsWith(".jpg", true) || name.endsWith(".jpeg", true) -> "image/jpeg"
         else -> "application/octet-stream"

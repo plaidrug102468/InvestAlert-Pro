@@ -115,7 +115,11 @@ class MainActivity : ComponentActivity() {
                     baseCurrency = baseCurrency,
                     fxRates = fxRates,
                     onRefresh = ::refreshPrices,
-                    onSave = { holding -> store.upsert(holding); reload() },
+                    onSave = { holding ->
+                        store.upsert(holding)
+                        reload()
+                        refreshPrices()
+                    },
                     onDelete = { id -> store.delete(id); reload() },
                     onToggleEnabled = { holding, enabled -> store.upsert(holding.copy(enabled = enabled)); reload() },
                     onToggleActive = ::updateActiveMonitoring,
@@ -125,8 +129,11 @@ class MainActivity : ComponentActivity() {
                         refreshFxRates()
                     },
                     onSearchAssets = { query, callback ->
+                        val local = AssetSearchProvider.localSearch(query)
+                        callback(local)
                         lifecycleScope.launch {
-                            callback(runCatching { AssetSearchProvider.search(query) }.getOrDefault(emptyList()))
+                            val full = runCatching { AssetSearchProvider.search(query) }.getOrDefault(local)
+                            if (full != local) callback(full)
                         }
                     },
                     onTestNotification = {
@@ -334,10 +341,13 @@ private fun PortfolioScreen(
     fun converted(amount: Double, currency: String): Double? =
         fxRates[currency.uppercase(Locale.US)]?.let { amount * it }
 
-    val totalInvested = holdings.sumOf { converted(it.investedAmount, it.investedCurrency) ?: 0.0 }
-    val totalCurrent = holdings.sumOf { h -> h.currentValue?.let { converted(it, h.currency) } ?: 0.0 }
-    val hasPrices = holdings.any { h -> h.currentValue != null && fxRates.containsKey(h.currency.uppercase(Locale.US)) }
-    val pnl = if (hasPrices) totalCurrent - totalInvested else null
+    val investedValues = holdings.map { h -> converted(h.investedAmount, h.investedCurrency) }
+    val currentValues = holdings.map { h -> h.currentValue?.let { converted(it, h.currency) } }
+    val allInvestedConverted = holdings.isEmpty() || investedValues.all { it != null }
+    val allCurrentConverted = holdings.isNotEmpty() && currentValues.all { it != null }
+    val totalInvested = investedValues.filterNotNull().sum()
+    val totalCurrent = currentValues.filterNotNull().sum()
+    val pnl = if (allInvestedConverted && allCurrentConverted) totalCurrent - totalInvested else null
     val pnlPct = if (pnl != null && totalInvested > 0) pnl / totalInvested * 100.0 else null
     val pnlColor = when {
         pnl == null -> MaterialTheme.colorScheme.onSurface
@@ -360,8 +370,8 @@ private fun PortfolioScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Portfolio snapshot", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 SummaryRow("Base currency", baseCurrency)
-                SummaryRow("Total invested", money(totalInvested, baseCurrency))
-                SummaryRow("Current value", if (hasPrices) money(totalCurrent, baseCurrency) else "Refresh prices")
+                SummaryRow("Total invested", if (allInvestedConverted) money(totalInvested, baseCurrency) else "FX unavailable")
+                SummaryRow("Current value", if (allCurrentConverted) money(totalCurrent, baseCurrency) else "Refresh prices")
                 SummaryRow(
                     if ((pnl ?: 0.0) >= 0) "Profit" else "Loss",
                     if (pnl == null) "—" else signedMoney(pnl, baseCurrency) + (pnlPct?.let { "  (${signedPct(it)})" } ?: ""),

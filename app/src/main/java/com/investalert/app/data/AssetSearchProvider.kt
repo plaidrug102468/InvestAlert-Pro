@@ -39,6 +39,20 @@ object AssetSearchProvider {
         AssetSuggestion("NED.JO","Nedbank Group","JSE","Equity","ZAR"),
         AssetSuggestion("OMU.JO","Old Mutual","JSE","Equity","ZAR"),
         AssetSuggestion("SLM.JO","Sanlam","JSE","Equity","ZAR"),
+        AssetSuggestion("AGOGE.JO","Allan Gray - Orbis Global Equity Feeder AMETF","JSE","AMETF","ZAR"),
+        AssetSuggestion("AGOGB.JO","Allan Gray - Orbis Global Balanced Feeder AMETF","JSE","AMETF","ZAR"),
+
+        // Allan Gray managed funds / unit trusts
+        AssetSuggestion("AGF:EQUITY","Allan Gray Equity Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:BALANCED","Allan Gray Balanced Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:TFBAL","Allan Gray Tax-Free Balanced Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:STABLE","Allan Gray Stable Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:INTEREST","Allan Gray Interest Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:BOND","Allan Gray Bond Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:INCOME","Allan Gray Income Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:MONEYMARKET","Allan Gray Money Market Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:ORBIS-EQ","Allan Gray - Orbis Global Equity Feeder Fund","Allan Gray","Unit Trust","ZAR"),
+        AssetSuggestion("AGF:ORBIS-BAL","Allan Gray - Orbis Global Balanced Feeder Fund","Allan Gray","Unit Trust","ZAR"),
 
         // US / global equities
         AssetSuggestion("AAPL","Apple Inc.","NASDAQ","Equity","USD"),

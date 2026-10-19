@@ -59,6 +59,7 @@ class HoldingStore(context: Context) {
         put("name", h.name)
         put("symbol", h.symbol)
         put("market", h.market)
+        put("assetType", h.assetType)
         put("whereHeld", h.whereHeld)
         put("units", h.units)
         put("investedAmount", h.investedAmount)
@@ -79,6 +80,7 @@ class HoldingStore(context: Context) {
         name = o.getString("name"),
         symbol = o.getString("symbol"),
         market = o.optString("market", "Other"),
+        assetType = o.optString("assetType", "Investment"),
         whereHeld = o.optString("whereHeld", ""),
         units = o.optDouble("units", 0.0),
         investedAmount = o.optDouble("investedAmount", 0.0),

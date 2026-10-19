@@ -49,6 +49,11 @@ object TraderProEngine {
             q.contains(h.name.lowercase(Locale.US)) || q.contains(h.symbol.removeSuffix(".JO").lowercase(Locale.US))
         }
 
+        val genericScan = listOf("best", "where to invest", "opportun", "portfolio", "risk", "sell", "reduce", "crypto", "forex", "jse", " us ").any { q.contains(it) }
+        val discovered = if (matched == null && !genericScan && q.length >= 3) {
+            runCatching { AssetSearchProvider.search(question, 5).firstOrNull() }.getOrNull()
+        } else null
+
         when {
             matched != null -> {
                 val a = runCatching { analyzeSymbol(matched.symbol) }.getOrNull()
@@ -69,6 +74,7 @@ object TraderProEngine {
                     )
                 }
             }
+            discovered != null -> analyzeDiscovered(discovered)
             q.contains("sell") || q.contains("reduce") || q.contains("worst") -> sellReview(holdings)
             q.contains("portfolio") || q.contains("risk") || q.contains("divers") -> portfolioReview(holdings)
             q.contains("crypto") || q.contains("coin") || q.contains("bitcoin") -> scan(cryptoUniverse, holdings, "Crypto market scan")
@@ -81,6 +87,22 @@ object TraderProEngine {
                 "I can analyse a specific holding, review portfolio risk, or scan a watch universe using trend, momentum, RSI and volatility."
             )
         }
+    }
+
+    private suspend fun analyzeDiscovered(asset: AssetSuggestion): AssistantReply {
+        val a = runCatching { analyzeSymbol(asset.symbol) }.getOrNull()
+            ?: return AssistantReply(asset.name, "I couldn't retrieve enough recent market history for ${asset.symbol}.")
+        val news = runCatching { NewsResearchProvider.news("${asset.name} ${asset.symbol}", 4) }.getOrDefault(emptyList())
+        return AssistantReply(
+            title = "${asset.name} • ${asset.symbol}",
+            body = buildString {
+                append("${a.stance} • score ${a.score}/100 • ${a.confidence} confidence. ")
+                append(a.reasons.joinToString(" "))
+                if (news.isNotEmpty()) append(" Recent related news is linked below.")
+            },
+            analyses = listOf(a),
+            links = news
+        )
     }
 
     private suspend fun sellReview(holdings: List<Holding>): AssistantReply {

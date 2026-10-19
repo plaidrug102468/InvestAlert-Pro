@@ -2,6 +2,20 @@ package com.investalert.app.data
 
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.abs
+import kotlin.math.max
+
+data class OcrLine(
+    val text: String,
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int
+) {
+    val centerX: Double get() = (left + right) / 2.0
+    val centerY: Double get() = (top + bottom) / 2.0
+    val height: Int get() = max(1, bottom - top)
+}
 
 data class ScreenshotInvestmentDraft(
     val token: String = UUID.randomUUID().toString(),
@@ -40,28 +54,67 @@ object InvestmentScreenshotParser {
     private val stopSymbols = setOf(
         "ZAR","USD","EUR","GBP","TOTAL","VALUE","PRICE","UNITS","SHARES","SHARE","QTY",
         "BUY","SELL","MARKET","PROFIT","LOSS","RETURN","PORTFOLIO","INVESTED","OPEN",
-        "EXCHANGE","CURRENT","PURCHASE","PREVIOUS","CLOSE","FSRS","FSR"
+        "EXCHANGE","CURRENT","PURCHASE","PREVIOUS","CLOSE","FSRS","FSR","JSE","NYSE",
+        "NASDAQ","INVEST","WATCHLIST","NOTIFY","FUNDS"
     )
 
     fun parse(text: String, defaultCurrency: String): ScreenshotInvestmentDraft {
         val lines = text.lines()
-            .map { it.trim().replace(Regex("""\s+"""), " ") }
-            .filter { it.isNotBlank() }
+            .mapIndexed { index, value ->
+                OcrLine(
+                    text = value.trim(),
+                    left = 0,
+                    top = index * 40,
+                    right = 1000,
+                    bottom = index * 40 + 30
+                )
+            }
+            .filter { it.text.isNotBlank() }
+        return parse(lines, text, defaultCurrency)
+    }
 
-        val lowerText = text.lowercase(Locale.US)
+    fun parse(
+        ocrLines: List<OcrLine>,
+        fullText: String,
+        defaultCurrency: String
+    ): ScreenshotInvestmentDraft {
+        val lines = ocrLines
+            .map { it.copy(text = cleanLine(it.text)) }
+            .filter { it.text.isNotBlank() }
+
+        val lowerText = fullText.lowercase(Locale.US)
         val broker = brokers.firstOrNull { p -> p.needles.any { lowerText.contains(it) } }?.label
+            ?: detectBrokerFromLines(lines)
+
+        val easyEquities = broker == "EasyEquities" ||
+            lines.any { normalize(it.text).contains("easyequities") }
 
         val symbol = detectSymbol(lines)
-        val wholeShares = valueNearLabel(
-            lines,
-            listOf("# shares", "shares", "whole shares", "whole units"),
-            rejectLabels = listOf("fsr", "fraction")
-        )
-        val fractional = valueNearLabel(
+        val likelyName = detectLikelyName(lines, symbol, broker)
+
+        val wholeShares = if (easyEquities) {
+            spatialValue(lines, listOf("# shares", "shares"), rejectLabels = listOf("fsr", "fraction"))
+                ?: valueNearLabel(lines.map { it.text }, listOf("# shares", "shares"), listOf("fsr", "fraction"))
+        } else {
+            spatialValue(lines, listOf("whole shares", "shares", "whole units"), listOf("fsr", "fraction"))
+                ?: valueNearLabel(lines.map { it.text }, listOf("whole shares", "shares", "whole units"), listOf("fsr", "fraction"))
+        }
+
+        val fractional = spatialValue(
             lines,
             listOf("# fsrs", "fsrs", "fsr", "fractional shares", "fractional units")
+        ) ?: valueNearLabel(
+            lines.map { it.text },
+            listOf("# fsrs", "fsrs", "fsr", "fractional shares", "fractional units")
         )
-        val genericUnits = valueNearLabel(lines, listOf("units", "quantity", "qty", "coins", "tokens"))
+
+        val genericUnits = spatialValue(
+            lines,
+            listOf("units", "quantity", "qty", "coins", "tokens")
+        ) ?: valueNearLabel(
+            lines.map { it.text },
+            listOf("units", "quantity", "qty", "coins", "tokens")
+        )
 
         val totalUnits = when {
             wholeShares != null || fractional != null -> (wholeShares ?: 0.0) + (fractional ?: 0.0)
@@ -69,16 +122,27 @@ object InvestmentScreenshotParser {
             else -> null
         }
 
-        val invested = valueNearLabel(
+        val invested = spatialValue(
             lines,
             listOf("purchase value", "amount invested", "invested", "cost value", "amount paid")
+        ) ?: valueNearLabel(
+            lines.map { it.text },
+            listOf("purchase value", "amount invested", "invested", "cost value", "amount paid")
         )
-        val currentValue = valueNearLabel(
+
+        val currentValue = spatialValue(
             lines,
             listOf("current value", "market value", "portfolio value")
+        ) ?: valueNearLabel(
+            lines.map { it.text },
+            listOf("current value", "market value", "portfolio value")
         )
-        val avgPurchase = valueNearLabel(
+
+        val avgPurchase = spatialValue(
             lines,
+            listOf("avg. purchase price", "avg purchase price", "average purchase price", "average buy", "avg cost")
+        ) ?: valueNearLabel(
+            lines.map { it.text },
             listOf("avg. purchase price", "avg purchase price", "average purchase price", "average buy", "avg cost")
         )
 
@@ -90,22 +154,27 @@ object InvestmentScreenshotParser {
 
         val currencyContext = buildString {
             lines.forEach { line ->
-                val l = line.lowercase(Locale.US)
+                val l = normalize(line.text)
                 if (
                     l.contains("purchase value") ||
                     l.contains("current value") ||
+                    l.contains("average") ||
                     l.contains("avg") ||
                     l.contains("invested")
-                ) append(line).append(' ')
+                ) append(line.text).append(' ')
             }
-            append(text)
+            append(fullText)
         }
         val currency = detectCurrency(currencyContext) ?: defaultCurrency
 
-        val likelyName = detectLikelyName(lines, symbol, broker)
+        val query = when {
+            symbol != null && symbol !in stopSymbols -> symbol
+            !likelyName.isNullOrBlank() -> likelyName
+            else -> ""
+        }
 
         return ScreenshotInvestmentDraft(
-            query = symbol ?: likelyName.orEmpty(),
+            query = query,
             units = totalUnits,
             wholeUnits = wholeShares,
             fractionalUnits = fractional,
@@ -115,43 +184,120 @@ object InvestmentScreenshotParser {
             averagePurchasePrice = avgPurchase,
             investedCurrency = currency,
             whereHeld = broker,
-            rawText = text
+            rawText = fullText
         )
     }
 
-    private fun detectSymbol(lines: List<String>): String? {
+    private fun detectBrokerFromLines(lines: List<OcrLine>): String? {
+        val combined = lines.joinToString(" ") { normalize(it.text) }
+        return brokers.firstOrNull { p ->
+            p.needles.any { combined.contains(it.lowercase(Locale.US)) }
+        }?.label
+    }
+
+    private fun detectSymbol(lines: List<OcrLine>): String? {
         val strict = Regex("""^[A-Z]{1,7}(?:\.JO|-USD|=X)?$""")
-        lines.forEach { line ->
-            val candidate = line.uppercase(Locale.US)
-                .replace(" ", "")
+        val candidates = lines.mapNotNull { line ->
+            val candidate = line.text.uppercase(Locale.US)
                 .replace(":", "")
                 .trim()
-            if (strict.matches(candidate) && candidate !in stopSymbols) return candidate
+            if (strict.matches(candidate) && candidate !in stopSymbols) {
+                candidate to line
+            } else null
         }
 
-        val embedded = Regex("""\b[A-Z]{1,7}(?:\.JO|-USD|=X)?\b""")
-        return lines.asSequence()
-            .flatMap { embedded.findAll(it.uppercase(Locale.US)).map { m -> m.value } }
-            .firstOrNull { it !in stopSymbols }
+        if (candidates.isEmpty()) return null
+
+        return candidates
+            .sortedWith(
+                compareBy<Pair<String, OcrLine>>(
+                    { pair ->
+                        when {
+                            pair.first.endsWith(".JO") || pair.first.endsWith("-USD") || pair.first.endsWith("=X") -> 0
+                            pair.first.length in 2..5 -> 1
+                            else -> 2
+                        }
+                    },
+                    { it.second.top }
+                )
+            )
+            .firstOrNull()
+            ?.first
     }
 
-    private fun detectLikelyName(lines: List<String>, symbol: String?, broker: String?): String? {
+    private fun detectLikelyName(
+        lines: List<OcrLine>,
+        symbol: String?,
+        broker: String?
+    ): String? {
         val badWords = listOf(
-            "profit", "loss", "exchange", "holding", "current value", "purchase value",
+            "profit", "loss", "exchange", "my holding", "current value", "purchase value",
             "average", "previous close", "shares", "fsr", "sell", "buy more",
-            "portfolio", "watchlist", "notify", "funds"
+            "portfolio", "watchlist", "notify", "my funds", "dividend rewards",
+            "open", "market value"
         )
-        return lines.firstOrNull { line ->
-            val lower = line.lowercase(Locale.US)
-            line.length in 4..70 &&
-                line.any { it.isLetter() } &&
-                !line.all { it.isUpperCase() || !it.isLetter() } &&
-                symbol?.let { !line.equals(it, true) } != false &&
-                broker?.let { !line.contains(it, true) } != false &&
+
+        val candidates = lines.mapNotNull { line ->
+            val cleaned = line.text
+                .replace(Regex("""^[^A-Za-z]+"""), "")
+                .trim()
+            val lower = normalize(cleaned)
+            val words = cleaned.split(Regex("""\s+""")).count { it.any(Char::isLetter) }
+
+            val good = cleaned.length in 4..80 &&
+                cleaned.any(Char::isLetter) &&
+                words >= 2 &&
+                symbol?.let { !cleaned.equals(it, true) } != false &&
+                broker?.let { !cleaned.contains(it, true) } != false &&
                 badWords.none { lower.contains(it) } &&
                 !lower.contains("http") &&
                 !lower.contains(".io")
+
+            if (good) cleaned to line else null
         }
+
+        return candidates
+            .sortedWith(compareBy<Pair<String, OcrLine>>({ it.second.top }, { -it.first.length }))
+            .firstOrNull()
+            ?.first
+    }
+
+    private fun spatialValue(
+        lines: List<OcrLine>,
+        labels: List<String>,
+        rejectLabels: List<String> = emptyList()
+    ): Double? {
+        val labelLine = lines.firstOrNull { line ->
+            val normalized = normalize(line.text)
+            labels.any { labelMatches(normalized, it) } &&
+                rejectLabels.none { normalized.contains(normalize(it)) }
+        } ?: return null
+
+        numberAfterLabel(labelLine.text, labels)?.let { return it }
+
+        val candidates = lines.mapNotNull { candidate ->
+            if (candidate === labelLine) return@mapNotNull null
+            val value = extractStandaloneNumber(candidate.text) ?: return@mapNotNull null
+
+            val labelHeight = labelLine.height.toDouble()
+            val dy = abs(candidate.centerY - labelLine.centerY)
+            val rightOf = candidate.left >= labelLine.left
+            val sameRow = dy <= labelHeight * 1.25
+            val below = candidate.top >= labelLine.top &&
+                candidate.top - labelLine.bottom <= labelLine.height * 4
+            val horizontalOverlap = candidate.right >= labelLine.left && candidate.left <= labelLine.right
+
+            val score = when {
+                sameRow && rightOf -> dy + max(0, candidate.left - labelLine.right) * 0.05
+                below && horizontalOverlap -> 100.0 + (candidate.top - labelLine.bottom)
+                below -> 250.0 + (candidate.top - labelLine.bottom) + abs(candidate.centerX - labelLine.centerX) * 0.1
+                else -> Double.MAX_VALUE
+            }
+
+            if (score == Double.MAX_VALUE) null else Triple(value, score, candidate)
+        }
+
+        return candidates.minByOrNull { it.second }?.first
     }
 
     private fun valueNearLabel(
@@ -160,25 +306,21 @@ object InvestmentScreenshotParser {
         rejectLabels: List<String> = emptyList()
     ): Double? {
         for (i in lines.indices) {
-            val lower = lines[i].lowercase(Locale.US)
+            val lower = normalize(lines[i])
             if (
-                labels.any { lower.contains(it) } &&
-                rejectLabels.none { lower.contains(it) }
+                labels.any { labelMatches(lower, it) } &&
+                rejectLabels.none { lower.contains(normalize(it)) }
             ) {
                 numberAfterLabel(lines[i], labels)?.let { return it }
 
-                for (offset in 1..3) {
+                for (offset in 1..4) {
                     val nextIndex = i + offset
                     if (nextIndex >= lines.size) break
                     val next = lines[nextIndex]
-                    val nextLower = next.lowercase(Locale.US)
+                    val nextLower = normalize(next)
 
-                    if (
-                        offset > 1 &&
-                        looksLikeAnotherFieldLabel(nextLower)
-                    ) break
-
-                    firstNumber(next)?.let { return it }
+                    if (looksLikeAnotherFieldLabel(nextLower)) break
+                    extractStandaloneNumber(next)?.let { return it }
                 }
             }
         }
@@ -186,29 +328,49 @@ object InvestmentScreenshotParser {
     }
 
     private fun numberAfterLabel(text: String, labels: List<String>): Double? {
-        val lower = text.lowercase(Locale.US)
-        val label = labels.firstOrNull { lower.contains(it) } ?: return null
-        val idx = lower.indexOf(label)
+        val lower = normalize(text)
+        val label = labels.firstOrNull { labelMatches(lower, it) } ?: return null
+        val labelNorm = normalize(label)
+        val idx = lower.indexOf(labelNorm)
         if (idx < 0) return null
-        return firstNumber(text.substring(idx + label.length))
+
+        val rawIndex = approximateRawIndex(text, labelNorm)
+        if (rawIndex >= text.length) return null
+        return extractStandaloneNumber(text.substring(rawIndex))
+    }
+
+    private fun approximateRawIndex(text: String, normalizedLabel: String): Int {
+        val lower = text.lowercase(Locale.US)
+        val words = normalizedLabel.split(' ').filter { it.isNotBlank() }
+        val lastWord = words.lastOrNull() ?: return 0
+        val idx = lower.lastIndexOf(lastWord)
+        return if (idx >= 0) idx + lastWord.length else 0
     }
 
     private fun looksLikeAnotherFieldLabel(text: String): Boolean {
         val labels = listOf(
-            "current value", "purchase value", "avg", "previous close",
+            "current value", "purchase value", "avg", "average", "previous close",
             "shares", "fsr", "profit", "loss", "exchange", "market value"
         )
         return labels.any { text.contains(it) }
     }
 
-    private fun firstNumber(text: String): Double? {
+    private fun extractStandaloneNumber(text: String): Double? {
         val normalized = text
-            .replace("O", "0")
-            .replace("o", "0")
             .replace("−", "-")
-        val regex = Regex("""[-+]?\d[\d\s,.]*""")
+            .replace("R ", "R")
+            .trim()
+
+        val regex = Regex("""[-+]?(?:R|\$|€|£)?\s*\d[\d\s,]*(?:\.\d+)?""")
         val raw = regex.find(normalized)?.value ?: return null
-        val cleaned = raw.replace(" ", "").replace(",", "").trimEnd('.')
+        val cleaned = raw
+            .replace("R", "", ignoreCase = true)
+            .replace("$", "")
+            .replace("€", "")
+            .replace("£", "")
+            .replace(" ", "")
+            .replace(",", "")
+            .trim()
         return cleaned.toDoubleOrNull()
     }
 
@@ -224,4 +386,27 @@ object InvestmentScreenshotParser {
             else -> null
         }
     }
+
+    private fun labelMatches(normalizedText: String, label: String): Boolean {
+        val n = normalize(label)
+        if (normalizedText.contains(n)) return true
+
+        val compactText = normalizedText.replace(" ", "")
+        val compactLabel = n.replace(" ", "")
+        return compactText.contains(compactLabel)
+    }
+
+    private fun normalize(text: String): String =
+        text.lowercase(Locale.US)
+            .replace("#", " ")
+            .replace(".", " ")
+            .replace(":", " ")
+            .replace(Regex("""[^a-z0-9/$£€=\-]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
+    private fun cleanLine(text: String): String =
+        text.replace('\u00A0', ' ')
+            .replace(Regex("""\s+"""), " ")
+            .trim()
 }

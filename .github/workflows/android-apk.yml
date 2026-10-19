@@ -41,16 +41,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir -p "$HOME/.android"
-          if gh release download investalert-signing --pattern investalert-debug.keystore --dir /tmp >/dev/null 2>&1; then
-            cp /tmp/investalert-debug.keystore "$HOME/.android/debug.keystore"
-            echo "Reusing permanent InvestAlert signing identity."
-          else
-            keytool -genkeypair               -keystore "$HOME/.android/debug.keystore"               -storepass android               -alias androiddebugkey               -keypass android               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=Android Debug,O=InvestAlert Development,C=ZA"
-            cp "$HOME/.android/debug.keystore" /tmp/investalert-debug.keystore
-            gh release create investalert-signing /tmp/investalert-debug.keystore               --title "InvestAlert signing identity"               --notes "InvestAlert Pro v1.5. Updates v1.4 in place with screenshot import, themes, dropdown currencies, watchlist, transaction history, news links, configurable alerts and morning brief."               --draft
+          RELEASE_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | select(.name=="InvestAlert signing identity" and .draft==true) | .id' | head -n1)"
+          if [ -z "$RELEASE_ID" ]; then
+            echo "Permanent signing release is missing; refusing to rotate signing identity."
+            exit 1
           fi
+          ASSET_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" --jq '.assets[] | select(.name=="investalert-debug.keystore") | .id' | head -n1)"
+          if [ -z "$ASSET_ID" ]; then
+            echo "Permanent signing asset is missing; refusing to rotate signing identity."
+            exit 1
+          fi
+          gh api -H "Accept: application/octet-stream" "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}" > "$HOME/.android/debug.keystore"
           chmod 600 "$HOME/.android/debug.keystore"
+          echo "Permanent InvestAlert signing identity loaded."
 
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace

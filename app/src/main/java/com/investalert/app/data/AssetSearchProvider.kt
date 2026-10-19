@@ -138,6 +138,63 @@ object AssetSearchProvider {
             .take(limit)
     }
 
+    fun bestScreenshotMatch(
+        draft: ScreenshotInvestmentDraft,
+        matches: List<AssetSuggestion>
+    ): AssetSuggestion? {
+        if (matches.isEmpty()) return null
+
+        fun bareSymbol(value: String): String = value
+            .uppercase(Locale.US)
+            .removeSuffix(".JO")
+            .removeSuffix("-USD")
+            .removeSuffix("=X")
+            .substringBefore('.')
+
+        fun normalizedWords(value: String): Set<String> = value
+            .lowercase(Locale.US)
+            .replace(Regex("""[^a-z0-9]+"""), " ")
+            .split(" ")
+            .map { it.trim() }
+            .filter { it.length >= 3 && it !in setOf("limited", "holdings", "group", "inc", "plc", "fund") }
+            .toSet()
+
+        val detectedSymbol = draft.detectedSymbol?.let(::bareSymbol)
+        val detectedNameWords = draft.detectedName?.let(::normalizedWords).orEmpty()
+        val rawWords = normalizedWords(draft.rawText)
+        val easyEquities = draft.whereHeld.equals("EasyEquities", true)
+        val paidCurrency = draft.investedCurrency?.uppercase(Locale.US)
+
+        val scored = matches.map { asset ->
+            var score = 0
+            val assetBare = bareSymbol(asset.symbol)
+            val assetWords = normalizedWords(asset.name)
+
+            if (!detectedSymbol.isNullOrBlank() && detectedSymbol == assetBare) score += 1200
+
+            if (detectedNameWords.isNotEmpty() && assetWords.isNotEmpty()) {
+                val overlap = detectedNameWords.intersect(assetWords).size
+                val needed = minOf(2, assetWords.size)
+                if (overlap >= needed) score += 750 + overlap * 20
+            }
+
+            if (assetWords.size >= 2 && rawWords.containsAll(assetWords.take(3).toSet())) {
+                score += 700
+            } else {
+                val overlap = assetWords.intersect(rawWords).size
+                if (overlap >= 2) score += 500 + overlap * 20
+            }
+
+            if (easyEquities && asset.exchange.equals("JSE", true)) score += 140
+            if (paidCurrency != null && asset.currency?.uppercase(Locale.US) == paidCurrency) score += 90
+            if (easyEquities && asset.currency?.uppercase(Locale.US) !in setOf(null, "ZAR")) score -= 250
+
+            asset to score
+        }.sortedByDescending { it.second }
+
+        return scored.firstOrNull { it.second >= 500 }?.first
+    }
+
     suspend fun search(query: String, limit: Int = 30): List<AssetSuggestion> = withContext(Dispatchers.IO) {
         val q = query.trim()
         if (q.length < 2) return@withContext localSearch(q, limit)

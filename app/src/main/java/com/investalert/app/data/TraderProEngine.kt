@@ -76,8 +76,20 @@ object TraderProEngine {
                 }
         }
 
-        val genericScan = listOf("best", "where to invest", "opportun", "portfolio", "risk", "sell", "reduce", "crypto", "forex", "jse", " us ").any { q.contains(it) }
-        val discovered = if (matched == null && !genericScan && q.length >= 3) {
+        val broadOpportunity = listOf(
+            "top ", "top5", "top 5", "best ", "where to invest", "places to invest",
+            "what should i invest", "what should we invest", "what should i buy",
+            "what to buy", "opportunities", "opportunity today", "invest in today",
+            "investment ideas", "ideas today", "research candidates"
+        ).any { q.contains(it) }
+
+        val genericScan = broadOpportunity || listOf(
+            "portfolio", "risk", "sell", "reduce", "crypto", "forex", "jse", " us "
+        ).any { q.contains(it) }
+
+        val mentionedAsset = if (!broadOpportunity) AssetSearchProvider.mentionedAsset(question) else null
+
+        val discovered = if (matched == null && mentionedAsset == null && !genericScan && q.length >= 3) {
             runCatching { AssetSearchProvider.search(question, 5).firstOrNull() }.getOrNull()
         } else null
 
@@ -98,6 +110,13 @@ object TraderProEngine {
 
         when {
             comparisonAssets.size >= 2 -> compareAssets(comparisonAssets.take(3))
+            broadOpportunity -> scan(
+                jseUniverse.take(5) + usUniverse.take(5) +
+                    listOf("VOO","QQQ","GLD") +
+                    cryptoUniverse.take(3),
+                holdings,
+                "Top research candidates now"
+            )
             followUpAsset != null -> analyzeDiscovered(followUpAsset)
             matched != null -> {
                 val a = runCatching { analyzeSymbol(matched.symbol) }.getOrNull()
@@ -120,6 +139,7 @@ object TraderProEngine {
             }
             attachmentAsset != null && (q.contains("this") || q.contains("attachment") || q.contains("file") || q.contains("screenshot") || q.contains("analyse") || q.contains("analyze") || question.isBlank()) ->
                 analyzeAttachment(attachmentAsset, attachments)
+            mentionedAsset != null -> analyzeDiscovered(mentionedAsset)
             discovered != null -> analyzeDiscovered(discovered)
             q.contains("sell") || q.contains("reduce") || q.contains("worst") -> sellReview(holdings)
             q.contains("portfolio") || q.contains("risk") || q.contains("divers") -> portfolioReview(holdings)
@@ -195,17 +215,32 @@ object TraderProEngine {
     private suspend fun scan(universe: List<String>, holdings: List<Holding>, title: String): AssistantReply {
         val owned = holdings.map { it.symbol.uppercase(Locale.US) }.toSet()
         val results = mutableListOf<Analysis>()
-        for (symbol in universe) {
+        for (symbol in universe.distinct()) {
             if (symbol in owned) continue
             runCatching { analyzeSymbol(symbol) }.getOrNull()?.let { results += it }
-            delay(100)
+            delay(80)
         }
         val top = results.sortedByDescending { it.score }.take(5)
         if (top.isEmpty()) return AssistantReply(title,"Market history is unavailable right now.")
+
+        val links = mutableListOf<NewsItem>()
+        for (candidate in top.take(3)) {
+            val asset = AssetSearchProvider.search(candidate.symbol, 3).firstOrNull()
+            val query = asset?.let { "${it.name} ${it.symbol}" } ?: candidate.symbol
+            runCatching { NewsResearchProvider.news(query, 2) }
+                .getOrDefault(emptyList())
+                .forEach { item -> if (links.none { it.key == item.key }) links += item }
+        }
+
         return AssistantReply(
-            title,
-            "Highest-scoring symbols in the current watch universe: " + top.joinToString("; ") { "${it.symbol} ${it.score}/100 (${it.stance})" } + ". Use this as a shortlist for further research.",
-            top
+            title = title,
+            body = buildString {
+                append("Based on the current trend, momentum, RSI and volatility screen, the five strongest research candidates in this watch universe are: ")
+                append(top.joinToString("; ") { "${it.symbol} ${it.score}/100 (${it.stance})" })
+                append(". These are research candidates, not automatic buy instructions. Review the charts, recent news, valuation, fees and your time horizon before acting.")
+            },
+            analyses = top,
+            links = links.take(6)
         )
     }
 

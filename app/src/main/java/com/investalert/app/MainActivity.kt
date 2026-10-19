@@ -219,7 +219,15 @@ class MainActivity : ComponentActivity() {
                     },
                     onAttachTrader = {
                         traderFilePicker.launch(
-                            arrayOf("image/*", "application/pdf", "text/*", "application/json")
+                            arrayOf(
+                                "image/*",
+                                "application/pdf",
+                                "text/*",
+                                "application/json",
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                            )
                         )
                     },
                     onRemoveTraderAttachment = { index ->

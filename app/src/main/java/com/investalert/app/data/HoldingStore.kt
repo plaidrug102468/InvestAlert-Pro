@@ -62,6 +62,7 @@ class HoldingStore(context: Context) {
         put("whereHeld", h.whereHeld)
         put("units", h.units)
         put("investedAmount", h.investedAmount)
+        put("investedCurrency", h.investedCurrency)
         put("currency", h.currency)
         put("lowAlert", h.lowAlert ?: JSONObject.NULL)
         put("highAlert", h.highAlert ?: JSONObject.NULL)
@@ -81,6 +82,7 @@ class HoldingStore(context: Context) {
         whereHeld = o.optString("whereHeld", ""),
         units = o.optDouble("units", 0.0),
         investedAmount = o.optDouble("investedAmount", 0.0),
+        investedCurrency = o.optString("investedCurrency", o.optString("currency", "ZAR")),
         currency = o.optString("currency", "USD"),
         lowAlert = nullableDouble(o, "lowAlert"),
         highAlert = nullableDouble(o, "highAlert"),

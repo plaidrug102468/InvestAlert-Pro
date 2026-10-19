@@ -26,6 +26,9 @@ object PriceCheckEngine {
         for (index in holdings.indices) {
             val holding = holdings[index]
             if (!holding.enabled) continue
+            if (holding.symbol.startsWith("AGF:") || holding.assetType.equals("Unit Trust", true)) {
+                continue
+            }
             checked++
             try {
                 val quote = YahooPriceProvider.fetchPrice(holding.symbol)

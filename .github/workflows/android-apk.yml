@@ -37,17 +37,32 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Prepare permanent InvestAlert signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$HOME/.android"
+          if gh release download investalert-signing --pattern investalert-debug.keystore --dir /tmp >/dev/null 2>&1; then
+            cp /tmp/investalert-debug.keystore "$HOME/.android/debug.keystore"
+            echo "Reusing permanent InvestAlert signing identity."
+          else
+            keytool -genkeypair               -keystore "$HOME/.android/debug.keystore"               -storepass android               -alias androiddebugkey               -keypass android               -keyalg RSA               -keysize 2048               -validity 10000               -dname "CN=Android Debug,O=InvestAlert Development,C=ZA"
+            cp "$HOME/.android/debug.keystore" /tmp/investalert-debug.keystore
+            gh release create investalert-signing /tmp/investalert-debug.keystore               --title "InvestAlert signing identity"               --notes "Private draft release used only to preserve the signing identity for InvestAlert updates."               --draft
+          fi
+          chmod 600 "$HOME/.android/debug.keystore"
+
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.1.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.2.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InvestAlert-Pro-v1.1
-          path: InvestAlert-Pro-v1.1.apk
+          name: InvestAlert-Pro-v1.2
+          path: InvestAlert-Pro-v1.2.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -55,8 +70,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.1 >/dev/null 2>&1; then
-            gh release upload v1.1 InvestAlert-Pro-v1.1.apk --clobber
+          if gh release view v1.2 >/dev/null 2>&1; then
+            gh release upload v1.2 InvestAlert-Pro-v1.2.apk --clobber
           else
-            gh release create v1.1 InvestAlert-Pro-v1.1.apk               --title "InvestAlert Pro v1.1"               --notes "InvestAlert Pro v1.1 Android APK"
+            gh release create v1.2 InvestAlert-Pro-v1.2.apk               --title "InvestAlert Pro v1.2"               --notes "InvestAlert Pro v1.2 Android APK. Fixes multi-currency holdings, crypto display, instrument search and portfolio P/L."
           fi

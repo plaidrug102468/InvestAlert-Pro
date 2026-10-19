@@ -16,6 +16,7 @@ data class Holding(
     val enabled: Boolean = true,
     val watchOnly: Boolean = false,
     val lastPrice: Double? = null,
+    val manualCurrentValue: Double? = null,
     val dayChangePercent: Double? = null,
     val lastUpdatedEpochMs: Long? = null,
     val lowTriggered: Boolean = false,
@@ -26,5 +27,5 @@ data class Holding(
         get() = if (!watchOnly && units > 0.0 && investedAmount >= 0.0) investedAmount / units else null
 
     val currentValue: Double?
-        get() = if (watchOnly) null else lastPrice?.let { it * units }
+        get() = if (watchOnly) null else manualCurrentValue ?: lastPrice?.let { it * units }
 }

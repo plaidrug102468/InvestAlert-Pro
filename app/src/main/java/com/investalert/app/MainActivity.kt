@@ -227,10 +227,10 @@ class MainActivity : ComponentActivity() {
                             traderAttachments = traderAttachments.toMutableList().also { it.removeAt(index) }
                         }
                     },
-                    onAskTrader = { question, attachments, callback ->
+                    onAskTrader = { question, attachments, context, callback ->
                         lifecycleScope.launch {
                             val reply = runCatching {
-                                TraderProEngine.answer(question, holdings, attachments)
+                                TraderProEngine.answer(question, holdings, attachments, context)
                             }.getOrElse {
                                 TraderProEngine.AssistantReply(
                                     "Trader Pro",
@@ -486,7 +486,7 @@ private fun InvestAlertApp(
     onTestNotification: () -> Unit,
     onAttachTrader: () -> Unit,
     onRemoveTraderAttachment: (Int) -> Unit,
-    onAskTrader: (String, List<TraderAttachment>, (TraderProEngine.AssistantReply) -> Unit) -> Unit
+    onAskTrader: (String, List<TraderAttachment>, String, (TraderProEngine.AssistantReply) -> Unit) -> Unit
 ) {
     var tab by remember { mutableStateOf(AppTab.PORTFOLIO) }
     var editing by remember { mutableStateOf<Holding?>(null) }

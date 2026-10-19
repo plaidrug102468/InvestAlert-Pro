@@ -15,6 +15,7 @@ data class Holding(
     val highAlert: Double?,
     val enabled: Boolean = true,
     val lastPrice: Double? = null,
+    val dayChangePercent: Double? = null,
     val lastUpdatedEpochMs: Long? = null,
     val lowTriggered: Boolean = false,
     val highTriggered: Boolean = false,

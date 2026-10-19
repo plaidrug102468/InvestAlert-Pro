@@ -83,6 +83,8 @@ fun InvestmentDialog(
     var importedCurrentValue by remember { mutableStateOf<Double?>(null) }
     var importedAveragePrice by remember { mutableStateOf<Double?>(null) }
     var importedPrice by remember { mutableStateOf<Double?>(null) }
+    var importedSymbol by remember { mutableStateOf<String?>(null) }
+    var importedName by remember { mutableStateOf<String?>(null) }
 
     fun applyAsset(suggestion: AssetSuggestion) {
         selectedAsset = suggestion
@@ -109,6 +111,8 @@ fun InvestmentDialog(
         draft.currentValue?.let { manualCurrentValueText = it.toString() }
         importedAveragePrice = draft.averagePurchasePrice
         importedPrice = draft.impliedCurrentPrice
+        importedSymbol = draft.detectedSymbol
+        importedName = draft.detectedName
         if (draft.query.isNotBlank()) {
             searchQuery = draft.query
             searching = true
@@ -178,8 +182,12 @@ fun InvestmentDialog(
                         ) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("Screenshot details detected", fontWeight = FontWeight.Bold)
-                                draftIdentity(scanDraft)?.let {
-                                    Text(it, style = MaterialTheme.typography.bodySmall)
+                                val identity = buildList {
+                                    importedSymbol?.takeIf { it.isNotBlank() }?.let { add("Ticker: $it") }
+                                    importedName?.takeIf { it.isNotBlank() }?.let { add("Name: $it") }
+                                }.joinToString(" • ")
+                                if (identity.isNotBlank()) {
+                                    Text(identity, style = MaterialTheme.typography.bodySmall)
                                 }
                                 if (importedWholeUnits != null || importedFractionalUnits != null) {
                                     Text(
@@ -401,13 +409,4 @@ fun InvestmentDialog(
             }
         }
     }
-}
-
-private fun draftIdentity(draft: ScreenshotInvestmentDraft?): String? {
-    draft ?: return null
-    val parts = buildList {
-        draft.detectedSymbol?.takeIf { it.isNotBlank() }?.let { add("Ticker: $it") }
-        draft.detectedName?.takeIf { it.isNotBlank() }?.let { add("Name: $it") }
-    }
-    return parts.takeIf { it.isNotEmpty() }?.joinToString(" • ")
 }

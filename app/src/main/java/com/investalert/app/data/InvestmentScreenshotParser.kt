@@ -19,6 +19,8 @@ data class OcrLine(
 data class ScreenshotInvestmentDraft(
     val token: String = UUID.randomUUID().toString(),
     val query: String = "",
+    val detectedSymbol: String? = null,
+    val detectedName: String? = null,
     val units: Double? = null,
     val wholeUnits: Double? = null,
     val fractionalUnits: Double? = null,
@@ -53,7 +55,8 @@ object InvestmentScreenshotParser {
     private val stopSymbols = setOf(
         "ZAR","USD","EUR","GBP","TOTAL","VALUE","PRICE","UNITS","SHARES","SHARE","QTY",
         "BUY","SELL","MARKET","PROFIT","LOSS","RETURN","PORTFOLIO","INVESTED","OPEN",
-        "EXCHANGE","CURRENT","PURCHASE","PREVIOUS","CLOSE","FSRS","FSR","MY","HOLDING"
+        "EXCHANGE","CURRENT","PURCHASE","PREVIOUS","CLOSE","FSRS","FSR","MY","HOLDING",
+        "JSE","BVB","NYSE","NASDAQ","AMEX","LSE","OTC","ETF","OPEN","CLOSED","ZAC"
     )
 
     fun parse(text: String, defaultCurrency: String): ScreenshotInvestmentDraft =
@@ -168,6 +171,8 @@ object InvestmentScreenshotParser {
 
         return ScreenshotInvestmentDraft(
             query = symbol ?: likelyName.orEmpty(),
+            detectedSymbol = symbol,
+            detectedName = likelyName,
             units = positiveOrNull(totalUnits),
             wholeUnits = nonNegativeOrNull(wholeShares),
             fractionalUnits = nonNegativeOrNull(fractional),
@@ -249,18 +254,49 @@ object InvestmentScreenshotParser {
 
     private fun detectSymbol(lines: List<String>): String? {
         val strict = Regex("""^[A-Z]{2,7}(?:\.JO|-USD|=X)?$""")
-        lines.forEach { line ->
-            val candidate = line.uppercase(Locale.US)
-                .replace(" ", "")
+        val candidates = mutableListOf<Pair<String, Int>>()
+
+        lines.forEachIndexed { index, raw ->
+            val cleaned = raw.uppercase(Locale.US)
                 .replace(":", "")
+                .replace("•", "")
                 .trim()
-            if (strict.matches(candidate) && candidate !in stopSymbols) return candidate
+
+            val direct = cleaned.replace(" ", "")
+            if (strict.matches(direct) && direct !in stopSymbols) {
+                var score = 0
+                val bare = direct.removeSuffix(".JO").removeSuffix("-USD").removeSuffix("=X")
+                if (direct.endsWith(".JO") || direct.endsWith("-USD") || direct.endsWith("=X")) score += 120
+                if (bare.length in 3..4) score += 100
+                else if (bare.length == 2 || bare.length == 5) score += 45
+                else score += 10
+                if (index < 12) score += 15
+                if (bare in setOf("ASPEN","HOLDINGS","LIMITED")) score -= 80
+                candidates += direct to score
+            }
         }
 
         val embedded = Regex("""\b[A-Z]{2,7}(?:\.JO|-USD|=X)?\b""")
-        return lines.asSequence()
-            .flatMap { embedded.findAll(it.uppercase(Locale.US)).map { m -> m.value } }
-            .firstOrNull { it !in stopSymbols }
+        lines.forEachIndexed { index, raw ->
+            embedded.findAll(raw.uppercase(Locale.US)).forEach { m ->
+                val candidate = m.value
+                if (candidate in stopSymbols) return@forEach
+                val bare = candidate.removeSuffix(".JO").removeSuffix("-USD").removeSuffix("=X")
+                var score = 0
+                if (candidate.endsWith(".JO") || candidate.endsWith("-USD") || candidate.endsWith("=X")) score += 110
+                if (bare.length in 3..4) score += 75
+                else if (bare.length == 2 || bare.length == 5) score += 25
+                if (index < 12) score += 10
+                if (bare in setOf("ASPEN","HOLDINGS","LIMITED")) score -= 80
+                candidates += candidate to score
+            }
+        }
+
+        return candidates
+            .groupBy { it.first }
+            .mapValues { entry -> entry.value.maxOf { it.second } }
+            .maxByOrNull { it.value }
+            ?.key
     }
 
     private fun detectLikelyName(lines: List<String>, symbol: String?, broker: String?): String? {

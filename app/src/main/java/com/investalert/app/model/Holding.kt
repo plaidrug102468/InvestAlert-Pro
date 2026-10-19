@@ -8,6 +8,7 @@ data class Holding(
     val whereHeld: String,
     val units: Double,
     val investedAmount: Double,
+    val investedCurrency: String,
     val currency: String,
     val lowAlert: Double?,
     val highAlert: Double?,
@@ -18,15 +19,9 @@ data class Holding(
     val highTriggered: Boolean = false,
     val lastSource: String? = null
 ) {
-    val averageBuyPrice: Double?
+    val averageCostPerUnit: Double?
         get() = if (units > 0.0 && investedAmount >= 0.0) investedAmount / units else null
 
     val currentValue: Double?
         get() = lastPrice?.let { it * units }
-
-    val profitLoss: Double?
-        get() = currentValue?.let { it - investedAmount }
-
-    val profitLossPercent: Double?
-        get() = if (investedAmount > 0.0) profitLoss?.div(investedAmount)?.times(100.0) else null
 }

@@ -107,7 +107,7 @@ object InvestmentScreenshotParser {
             labels = listOf("units", "quantity", "qty", "coins", "tokens")
         )
 
-        val totalUnits = when {
+        val detectedUnits = when {
             wholeShares != null || fractional != null -> (wholeShares ?: 0.0) + (fractional ?: 0.0)
             genericUnits != null -> genericUnits
             else -> null
@@ -131,6 +131,14 @@ object InvestmentScreenshotParser {
                 "average purchase price", "average buy", "avg cost"
             )
         )
+
+        val totalUnits = detectedUnits ?: if (
+            invested != null &&
+            avgPurchase != null &&
+            avgPurchase > 0.0
+        ) {
+            invested / avgPurchase
+        } else null
 
         val impliedCurrentPrice = if (
             currentValue != null &&

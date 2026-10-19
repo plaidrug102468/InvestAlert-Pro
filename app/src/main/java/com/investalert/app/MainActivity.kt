@@ -161,7 +161,9 @@ class MainActivity : ComponentActivity() {
     private fun refreshFxRates() {
         if (!::settings.isInitialized) return
         val target = settings.baseCurrency()
-        val currencies = holdings.map { it.currency.uppercase(Locale.US) }.distinct()
+        val currencies = holdings.flatMap {
+            listOf(it.currency.uppercase(Locale.US), it.investedCurrency.uppercase(Locale.US))
+        }.distinct()
         lifecycleScope.launch {
             val rates = mutableMapOf<String, Double>()
             rates[target] = 1.0

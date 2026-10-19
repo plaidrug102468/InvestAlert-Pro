@@ -22,6 +22,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -414,10 +415,10 @@ private fun InvestAlertApp(
     onTestNotification: () -> Unit,
     onAskTrader: (String, (TraderProEngine.AssistantReply) -> Unit) -> Unit
 ) {
-    var tab by mutableStateOf(AppTab.PORTFOLIO)
-    var editing by mutableStateOf<Holding?>(null)
-    var creating by mutableStateOf(false)
-    var transacting by mutableStateOf<Holding?>(null)
+    var tab by remember { mutableStateOf(AppTab.PORTFOLIO) }
+    var editing by remember { mutableStateOf<Holding?>(null) }
+    var creating by remember { mutableStateOf(false) }
+    var transacting by remember { mutableStateOf<Holding?>(null) }
 
     Scaffold(
         topBar = {

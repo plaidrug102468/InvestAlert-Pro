@@ -3,7 +3,7 @@ package com.investalert.app.monitoring
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.investalert.app.data.AppSettings
@@ -69,7 +69,6 @@ class MorningBriefWorker(appContext: Context, params: WorkerParameters) : Corout
         }
 
         AppNotifications.showMorningBrief(applicationContext, "InvestAlert morning brief", body)
-        schedule(applicationContext, true)
         return Result.success()
     }
 
@@ -86,10 +85,14 @@ class MorningBriefWorker(appContext: Context, params: WorkerParameters) : Corout
             if (!next.isAfter(now)) next = next.plusDays(1)
             val delay = Duration.between(now, next).toMinutes().coerceAtLeast(1)
 
-            val request = OneTimeWorkRequestBuilder<MorningBriefWorker>()
+            val request = PeriodicWorkRequestBuilder<MorningBriefWorker>(24, TimeUnit.HOURS)
                 .setInitialDelay(delay, TimeUnit.MINUTES)
                 .build()
-            wm.enqueueUniqueWork(UNIQUE_WORK, androidx.work.ExistingWorkPolicy.REPLACE, request)
+            wm.enqueueUniquePeriodicWork(
+                UNIQUE_WORK,
+                androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
+                request
+            )
         }
 
         private fun money(value: Double, currency: String): String {

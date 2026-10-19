@@ -37,6 +37,7 @@ import com.investalert.app.data.AssetSuggestion
 import com.investalert.app.data.CurrencyConverter
 import com.investalert.app.data.HoldingStore
 import com.investalert.app.data.InvestmentScreenshotParser
+import com.investalert.app.data.OcrLine
 import com.investalert.app.data.ScreenshotInvestmentDraft
 import com.investalert.app.data.TraderProEngine
 import com.investalert.app.data.TransactionStore
@@ -348,8 +349,25 @@ class MainActivity : ComponentActivity() {
                 if (result.text.isBlank()) {
                     Toast.makeText(this, "No readable investment details found.", Toast.LENGTH_LONG).show()
                 } else {
-                    scanDraft = InvestmentScreenshotParser.parse(result.text, baseCurrency)
-                    Toast.makeText(this, "Screenshot read. Review the imported details.", Toast.LENGTH_SHORT).show()
+                    val structuredLines = result.textBlocks.flatMap { block ->
+                        block.lines.mapNotNull { line ->
+                            line.boundingBox?.let { box ->
+                                OcrLine(
+                                    text = line.text,
+                                    left = box.left,
+                                    top = box.top,
+                                    right = box.right,
+                                    bottom = box.bottom
+                                )
+                            }
+                        }
+                    }
+                    scanDraft = InvestmentScreenshotParser.parse(
+                        ocrLines = structuredLines,
+                        fullText = result.text,
+                        defaultCurrency = baseCurrency
+                    )
+                    Toast.makeText(this, "Screenshot read. Review the detected values.", Toast.LENGTH_SHORT).show()
                 }
             }
             .addOnFailureListener {

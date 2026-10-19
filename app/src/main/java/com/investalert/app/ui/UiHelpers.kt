@@ -40,10 +40,31 @@ fun InvestAlertTheme(
         "ORANGE" -> Color(0xFFB75B00)
         else -> Color(0xFF6D4FB3)
     }
+    val onAccent = Color.White
     val scheme = if (dark) {
-        darkColorScheme(primary = accent, secondary = accent)
+        darkColorScheme(
+            primary = accent,
+            onPrimary = onAccent,
+            primaryContainer = accent,
+            onPrimaryContainer = onAccent,
+            secondary = accent,
+            onSecondary = onAccent,
+            secondaryContainer = accent.copy(alpha = 0.30f),
+            tertiary = accent,
+            onTertiary = onAccent
+        )
     } else {
-        lightColorScheme(primary = accent, secondary = accent)
+        lightColorScheme(
+            primary = accent,
+            onPrimary = onAccent,
+            primaryContainer = accent.copy(alpha = 0.18f),
+            onPrimaryContainer = accent,
+            secondary = accent,
+            onSecondary = onAccent,
+            secondaryContainer = accent.copy(alpha = 0.14f),
+            tertiary = accent,
+            onTertiary = onAccent
+        )
     }
     MaterialTheme(colorScheme = scheme, content = content)
 }

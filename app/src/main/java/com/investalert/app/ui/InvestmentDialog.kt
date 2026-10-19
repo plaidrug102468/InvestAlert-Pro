@@ -76,6 +76,11 @@ fun InvestmentDialog(
     var error by remember { mutableStateOf<String?>(null) }
     var manualMode by remember(initial?.id) { mutableStateOf(false) }
     var importedNotice by remember { mutableStateOf(false) }
+    var importedWholeUnits by remember { mutableStateOf<Double?>(null) }
+    var importedFractionalUnits by remember { mutableStateOf<Double?>(null) }
+    var importedCurrentValue by remember { mutableStateOf<Double?>(null) }
+    var importedAveragePrice by remember { mutableStateOf<Double?>(null) }
+    var importedPrice by remember { mutableStateOf<Double?>(null) }
 
     fun applyAsset(suggestion: AssetSuggestion) {
         selectedAsset = suggestion
@@ -96,6 +101,11 @@ fun InvestmentDialog(
         draft.investedAmount?.let { investedText = it.toString() }
         draft.investedCurrency?.let { investedCurrency = it }
         draft.whereHeld?.let { whereHeld = it }
+        importedWholeUnits = draft.wholeUnits
+        importedFractionalUnits = draft.fractionalUnits
+        importedCurrentValue = draft.currentValue
+        importedAveragePrice = draft.averagePurchasePrice
+        importedPrice = draft.impliedCurrentPrice
         if (draft.query.isNotBlank()) {
             searchQuery = draft.query
             searching = true
@@ -159,7 +169,27 @@ fun InvestmentDialog(
                         Text(if (screenshotBusy) "Reading screenshot…" else "Scan investment screenshot")
                     }
                     if (importedNotice) {
-                        Text("Screenshot details imported. Please review before saving.", style = MaterialTheme.typography.bodySmall)
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Screenshot details detected", fontWeight = FontWeight.Bold)
+                                if (importedWholeUnits != null || importedFractionalUnits != null) {
+                                    Text(
+                                        "Whole shares: ${number(importedWholeUnits ?: 0.0)} • Fractional: ${number(importedFractionalUnits ?: 0.0)} • Total: ${unitsText.ifBlank { "—" }}",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                importedCurrentValue?.let {
+                                    Text("Screenshot current value: ${money(it, investedCurrency)}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                importedAveragePrice?.let {
+                                    Text("Screenshot average price: ${priceMoney(it, investedCurrency)}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text("Please review the imported fields before saving.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                     }
 
                     Row(
@@ -336,7 +366,7 @@ fun InvestmentDialog(
                                         highAlert = high,
                                         enabled = enabled,
                                         watchOnly = watchOnly,
-                                        lastPrice = initial?.lastPrice,
+                                        lastPrice = initial?.lastPrice ?: importedPrice,
                                         dayChangePercent = initial?.dayChangePercent,
                                         lastUpdatedEpochMs = initial?.lastUpdatedEpochMs,
                                         lowTriggered = initial?.lowTriggered ?: false,

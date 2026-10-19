@@ -54,7 +54,6 @@ object TraderProEngine {
                     "${matched.name} • ${matched.symbol}",
                     buildString {
                         append("${a.stance} • score ${a.score}/100 • ${a.confidence} confidence. ")
-                        matched.profitLossPercent?.let { append("Your position is ${signedPct(it)} versus amount invested. ") }
                         append(a.reasons.joinToString(" "))
                     },
                     listOf(a)
@@ -72,18 +71,25 @@ object TraderProEngine {
     }
 
     private suspend fun portfolioReview(holdings: List<Holding>): AssistantReply {
-        if (holdings.isEmpty()) return AssistantReply("Portfolio review","Add investments first so I can analyse concentration and performance.")
-        val priced = holdings.filter { it.currentValue != null }
-        val total = priced.sumOf { it.currentValue ?: 0.0 }
-        val biggest = if (total > 0) priced.maxByOrNull { it.currentValue ?: 0.0 } else null
-        val biggestPct = biggest?.currentValue?.let { if (total > 0) it / total * 100 else 0.0 }
-        val below = holdings.count { (it.profitLoss ?: 0.0) < 0 }
-        val body = buildString {
-            if (biggest != null && biggestPct != null) append("Largest holding: ${biggest.name} at about ${fmt1(biggestPct)}% of priced holdings. ")
-            append("$below of ${holdings.size} holding(s) are currently below invested value. ")
-            append("Review concentration, trend quality and your own risk tolerance before acting.")
+        if (holdings.isEmpty()) return AssistantReply("Portfolio review","Add investments first so I can analyse your holdings.")
+        val analyses = mutableListOf<Analysis>()
+        for (holding in holdings.filter { it.enabled }.take(8)) {
+            runCatching { analyzeSymbol(holding.symbol) }.getOrNull()?.let { analyses += it }
+            delay(80)
         }
-        return AssistantReply("Portfolio review", body)
+        val marketMix = holdings.groupBy { it.market }.mapValues { it.value.size }
+        val body = buildString {
+            append("You have ${holdings.size} holding(s). ")
+            append("Market mix: ${marketMix.entries.joinToString { "${it.key} ${it.value}" }}. ")
+            if (analyses.isNotEmpty()) {
+                val weakest = analyses.minByOrNull { it.score }
+                val strongest = analyses.maxByOrNull { it.score }
+                if (strongest != null) append("Strongest current technical score: ${strongest.symbol} ${strongest.score}/100. ")
+                if (weakest != null) append("Weakest current technical score: ${weakest.symbol} ${weakest.score}/100. ")
+            }
+            append("Use this as a research view rather than an automatic trade instruction.")
+        }
+        return AssistantReply("Portfolio review", body, analyses.sortedByDescending { it.score }.take(5))
     }
 
     private suspend fun scan(universe: List<String>, holdings: List<Holding>, title: String): AssistantReply {

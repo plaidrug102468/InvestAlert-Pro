@@ -56,13 +56,13 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.2.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk InvestAlert-Pro-v1.3.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InvestAlert-Pro-v1.2
-          path: InvestAlert-Pro-v1.2.apk
+          name: InvestAlert-Pro-v1.3
+          path: InvestAlert-Pro-v1.3.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -70,8 +70,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v1.2 >/dev/null 2>&1; then
-            gh release upload v1.2 InvestAlert-Pro-v1.2.apk --clobber
+          if gh release view v1.3 >/dev/null 2>&1; then
+            gh release upload v1.3 InvestAlert-Pro-v1.3.apk --clobber
           else
-            gh release create v1.2 InvestAlert-Pro-v1.2.apk               --title "InvestAlert Pro v1.2"               --notes "InvestAlert Pro v1.2 Android APK. Fixes multi-currency holdings, crypto display, instrument search and portfolio P/L."
+            gh release create v1.3 InvestAlert-Pro-v1.3.apk               --title "InvestAlert Pro v1.3"               --notes "InvestAlert Pro v1.3 Android APK. Clean-install InvestAlert Pro with multi-currency portfolio math, expanded asset search, crypto/forex scans, recent headlines and improved Trader Pro research."
           fi

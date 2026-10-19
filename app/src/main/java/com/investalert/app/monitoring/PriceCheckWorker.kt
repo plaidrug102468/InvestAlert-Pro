@@ -18,12 +18,20 @@ class PriceCheckWorker(appContext: Context, params: WorkerParameters) : Coroutin
 
     companion object {
         private const val UNIQUE_WORK = "investalert_periodic_price_check"
-        fun schedule(context: Context) {
-            val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-            val request = PeriodicWorkRequestBuilder<PriceCheckWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(constraints).build()
+
+        fun schedule(context: Context, minutes: Int = 15) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+            val request = PeriodicWorkRequestBuilder<PriceCheckWorker>(
+                minutes.coerceAtLeast(15).toLong(),
+                TimeUnit.MINUTES
+            ).setConstraints(constraints).build()
+
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                UNIQUE_WORK, ExistingPeriodicWorkPolicy.UPDATE, request
+                UNIQUE_WORK,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request
             )
         }
     }

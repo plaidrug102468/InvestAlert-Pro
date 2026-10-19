@@ -451,8 +451,8 @@ private fun HoldingCard(
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -460,51 +460,73 @@ private fun HoldingCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(holding.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(holding.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(
-                        "${holding.symbol} • ${holding.assetType} • ${holding.market} • ${holding.currency}",
+                        "${holding.symbol} • ${holding.assetType}" +
+                            (if (holding.whereHeld.isNotBlank()) " • ${holding.whereHeld}" else ""),
                         style = MaterialTheme.typography.labelMedium
                     )
-                    if (holding.whereHeld.isNotBlank()) {
-                        Text("Held at ${holding.whereHeld}", style = MaterialTheme.typography.labelSmall)
-                    }
                 }
                 Switch(checked = holding.enabled, onCheckedChange = onToggleEnabled)
             }
 
             HorizontalDivider()
 
-            SummaryRow("Units", number(holding.units))
-            SummaryRow("Invested", money(holding.investedAmount, holding.investedCurrency))
-            holding.averageCostPerUnit?.let { SummaryRow("Avg cost / unit", priceMoney(it, holding.investedCurrency)) }
-            SummaryRow(
-                "Current price",
-                holding.lastPrice?.let { priceMoney(it, holding.currency) } ?: "Not refreshed"
+            Text("Current value", style = MaterialTheme.typography.labelMedium)
+            Text(
+                baseValue?.let { money(it, baseCurrency) } ?: "Refresh price",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
             )
-            SummaryRow(
-                "Current value",
-                currentValue?.let { money(it, holding.currency) } ?: "—"
-            )
-
-            if (baseCurrency != holding.currency.uppercase(Locale.US) && baseValue != null) {
-                SummaryRow("Value in $baseCurrency", money(baseValue, baseCurrency))
+            if (basePnl != null) {
+                Text(
+                    (if (basePnl >= 0) "Profit " else "Loss ") +
+                        signedMoney(basePnl, baseCurrency) +
+                        (pnlPct?.let { "  (${signedPct(it)})" } ?: ""),
+                    color = pnlColor,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            SummaryRow(
-                if ((basePnl ?: 0.0) >= 0) "Profit" else "Loss",
-                if (basePnl != null) signedMoney(basePnl, baseCurrency) + (pnlPct?.let { "  (${signedPct(it)})" } ?: "") else "—",
-                valueColor = pnlColor
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Invested", style = MaterialTheme.typography.labelSmall)
+                    Text(money(holding.investedAmount, holding.investedCurrency), fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Units", style = MaterialTheme.typography.labelSmall)
+                    Text(number(holding.units), fontWeight = FontWeight.Bold)
+                }
+            }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Market price", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        holding.lastPrice?.let { priceMoney(it, holding.currency) } ?: "—",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Avg cost / unit", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        holding.averageCostPerUnit?.let { priceMoney(it, holding.investedCurrency) } ?: "—",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (holding.lowAlert != null || holding.highAlert != null) {
                 Text(
-                    "Low: ${holding.lowAlert?.let { money(it, holding.currency) } ?: "Off"}",
-                    color = if (holding.lowTriggered) LossRed else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium
-                )
-                Text(
-                    "High: ${holding.highAlert?.let { money(it, holding.currency) } ?: "Off"}",
-                    color = if (holding.highTriggered) GainGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                    "Alerts  •  Low ${holding.lowAlert?.let { priceMoney(it, holding.currency) } ?: "Off"}" +
+                        "  •  High ${holding.highAlert?.let { priceMoney(it, holding.currency) } ?: "Off"}",
                     style = MaterialTheme.typography.labelMedium
                 )
             }

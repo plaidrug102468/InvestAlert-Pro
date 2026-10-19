@@ -115,15 +115,18 @@ object AssetSearchProvider {
     fun localSearch(query: String, limit: Int = 30): List<AssetSuggestion> {
         val q = query.trim()
         if (q.isBlank()) return featured.take(limit)
-        val words = q.lowercase(Locale.US).split(" ").filter { it.isNotBlank() }
+        val normalizedQuery = q.lowercase(Locale.US)
+            .replace("allen gray", "allan gray")
+            .replace("easy equities", "easyequities")
+        val words = normalizedQuery.split(" ").filter { it.isNotBlank() }
         return featured
             .map { item ->
                 val searchable = "${item.name} ${item.symbol} ${item.exchange} ${item.assetType}".lowercase(Locale.US)
                 val score = when {
                     item.symbol.equals(q, true) -> 100
-                    item.name.equals(q, true) -> 95
+                    item.name.lowercase(Locale.US) == normalizedQuery -> 95
                     item.symbol.startsWith(q, true) -> 90
-                    item.name.startsWith(q, true) -> 85
+                    item.name.lowercase(Locale.US).startsWith(normalizedQuery) -> 85
                     words.all { searchable.contains(it) } -> 70
                     else -> 0
                 }

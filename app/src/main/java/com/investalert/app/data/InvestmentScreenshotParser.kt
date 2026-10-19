@@ -57,14 +57,14 @@ object InvestmentScreenshotParser {
     )
 
     fun parse(text: String, defaultCurrency: String): ScreenshotInvestmentDraft =
-        parse(text, emptyList(), defaultCurrency)
+        parse(fullText = text, ocrLines = emptyList(), defaultCurrency = defaultCurrency)
 
     fun parse(
-        text: String,
         ocrLines: List<OcrLine>,
+        fullText: String,
         defaultCurrency: String
     ): ScreenshotInvestmentDraft {
-        val rawLines = text.lines()
+        val rawLines = fullText.lines()
             .map { normalizeSpace(it) }
             .filter { it.isNotBlank() }
 
@@ -72,7 +72,7 @@ object InvestmentScreenshotParser {
             .map { it.copy(text = normalizeSpace(it.text)) }
             .filter { it.text.isNotBlank() }
 
-        val lowerText = text.lowercase(Locale.US)
+        val lowerText = fullText.lowercase(Locale.US)
         val looksLikeEasyEquities =
             lowerText.contains("easyequities") ||
                 lowerText.contains("form.easyequities") ||
@@ -148,7 +148,7 @@ object InvestmentScreenshotParser {
                     l.contains("invested")
                 ) append(line).append(' ')
             }
-            append(text)
+            append(fullText)
         }
         val currency = detectCurrency(currencyContext) ?: defaultCurrency
 
@@ -169,7 +169,7 @@ object InvestmentScreenshotParser {
             averagePurchasePrice = positiveOrNull(avgPurchase),
             investedCurrency = currency,
             whereHeld = broker,
-            rawText = text
+            rawText = fullText
         )
     }
 

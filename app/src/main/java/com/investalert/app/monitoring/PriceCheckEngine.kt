@@ -29,6 +29,7 @@ object PriceCheckEngine {
                 val evaluated = AlertEvaluator.evaluate(holding, quote.price)
                 val updated = evaluated.updated.copy(
                     currency = quote.currency,
+                    dayChangePercent = quote.dayChangePercent,
                     lastUpdatedEpochMs = quote.fetchedAtEpochMs,
                     lastSource = quote.source
                 )

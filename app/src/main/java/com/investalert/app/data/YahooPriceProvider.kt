@@ -12,6 +12,7 @@ object YahooPriceProvider {
         val symbol: String,
         val price: Double,
         val currency: String,
+        val dayChangePercent: Double?,
         val fetchedAtEpochMs: Long,
         val source: String = "Yahoo Finance (may be delayed)"
     )
@@ -42,13 +43,21 @@ object YahooPriceProvider {
             if (price.isNaN()) price = latestClose(item)
             if (price.isNaN() || price <= 0.0) throw IllegalStateException("No valid price for $symbol")
 
+            var previousClose = meta.optDouble("chartPreviousClose", Double.NaN)
+            if (previousClose.isNaN()) previousClose = meta.optDouble("previousClose", Double.NaN)
+
             var currency = meta.optString("currency", "USD").ifBlank { "USD" }
             if (currency.equals("ZAc", ignoreCase = true)) {
                 price /= 100.0
+                if (!previousClose.isNaN()) previousClose /= 100.0
                 currency = "ZAR"
             }
 
-            Quote(symbol, price, currency.uppercase(), System.currentTimeMillis())
+            val dayChangePercent = if (!previousClose.isNaN() && previousClose > 0.0) {
+                (price / previousClose - 1.0) * 100.0
+            } else null
+
+            Quote(symbol, price, currency.uppercase(), dayChangePercent, System.currentTimeMillis())
         } finally {
             connection.disconnect()
         }

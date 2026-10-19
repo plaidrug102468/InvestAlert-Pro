@@ -138,6 +138,51 @@ object AssetSearchProvider {
             .take(limit)
     }
 
+    fun mentionedAsset(text: String): AssetSuggestion? {
+        val normalized = text.lowercase(Locale.US)
+            .replace("/", " ")
+            .replace("-", " ")
+            .replace(Regex("""[^a-z0-9^]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+        if (normalized.isBlank()) return null
+        val tokens = normalized.split(" ").toSet()
+        val generic = setOf(
+            "the","and","for","with","group","limited","holdings","inc","plc","fund",
+            "global","bank","trust","index","equity","etf","market","stock","shares"
+        )
+
+        return featured.map { asset ->
+            val bare = asset.symbol.uppercase(Locale.US)
+                .removeSuffix(".JO")
+                .removeSuffix("-USD")
+                .removeSuffix("=X")
+                .removePrefix("^")
+                .lowercase(Locale.US)
+
+            val nameNormalized = asset.name.lowercase(Locale.US)
+                .replace(Regex("""[^a-z0-9]+"""), " ")
+                .replace(Regex("""\s+"""), " ")
+                .trim()
+            val nameWords = nameNormalized.split(" ").filter { it.length >= 3 && it !in generic }
+
+            var score = 0
+            if (bare.length >= 2 && bare in tokens) score += 220
+            if (nameNormalized.length >= 4 && normalized.contains(nameNormalized)) score += 210
+            nameWords.firstOrNull()?.let { first ->
+                if (first.length >= 4 && first in tokens) score += 130
+            }
+            val overlap = nameWords.count { it in tokens }
+            if (overlap >= 2) score += 160 + overlap * 20
+
+            asset to score
+        }
+            .filter { it.second >= 130 }
+            .sortedByDescending { it.second }
+            .firstOrNull()
+            ?.first
+    }
+
     fun bestScreenshotMatch(
         draft: ScreenshotInvestmentDraft,
         matches: List<AssetSuggestion>

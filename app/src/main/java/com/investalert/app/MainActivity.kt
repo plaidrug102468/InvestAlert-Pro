@@ -39,6 +39,8 @@ import com.investalert.app.data.HoldingStore
 import com.investalert.app.data.InvestmentScreenshotParser
 import com.investalert.app.data.OcrLine
 import com.investalert.app.data.ScreenshotInvestmentDraft
+import com.investalert.app.data.TraderAttachment
+import com.investalert.app.data.TraderAttachmentProcessor
 import com.investalert.app.data.TraderProEngine
 import com.investalert.app.data.TransactionStore
 import com.investalert.app.model.Holding
@@ -69,6 +71,8 @@ class MainActivity : ComponentActivity() {
     private var isRefreshing by mutableStateOf(false)
     private var screenshotBusy by mutableStateOf(false)
     private var scanDraft by mutableStateOf<ScreenshotInvestmentDraft?>(null)
+    private var traderAttachments by mutableStateOf<List<TraderAttachment>>(emptyList())
+    private var traderAttachmentBusy by mutableStateOf(false)
 
     private var baseCurrency by mutableStateOf("ZAR")
     private var themeMode by mutableStateOf("SYSTEM")
@@ -94,6 +98,12 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) readInvestmentScreenshot(uri)
+    }
+
+    private val traderFilePicker = registerForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) processTraderAttachments(uris)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -126,6 +136,8 @@ class MainActivity : ComponentActivity() {
                     dailyMoveThreshold = dailyMoveThreshold,
                     newsAlerts = newsAlerts,
                     morningBrief = morningBrief,
+                    traderAttachments = traderAttachments,
+                    traderAttachmentBusy = traderAttachmentBusy,
                     onRefresh = ::refreshPrices,
                     onSave = { holding ->
                         store.upsert(holding)
@@ -205,10 +217,20 @@ class MainActivity : ComponentActivity() {
                         requestNotificationPermissionIfNeeded()
                         AppNotifications.showTestAlert(this)
                     },
-                    onAskTrader = { question, callback ->
+                    onAttachTrader = {
+                        traderFilePicker.launch(
+                            arrayOf("image/*", "application/pdf", "text/*", "application/json")
+                        )
+                    },
+                    onRemoveTraderAttachment = { index ->
+                        if (index in traderAttachments.indices) {
+                            traderAttachments = traderAttachments.toMutableList().also { it.removeAt(index) }
+                        }
+                    },
+                    onAskTrader = { question, attachments, callback ->
                         lifecycleScope.launch {
                             val reply = runCatching {
-                                TraderProEngine.answer(question, holdings)
+                                TraderProEngine.answer(question, holdings, attachments)
                             }.getOrElse {
                                 TraderProEngine.AssistantReply(
                                     "Trader Pro",
@@ -216,6 +238,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             callback(reply)
+                            traderAttachments = emptyList()
                         }
                     }
                 )
@@ -379,6 +402,34 @@ class MainActivity : ComponentActivity() {
             }
     }
 
+    private fun processTraderAttachments(uris: List<Uri>) {
+        if (traderAttachmentBusy) return
+        traderAttachmentBusy = true
+        lifecycleScope.launch {
+            val loaded = mutableListOf<TraderAttachment>()
+            for (uri in uris.take(6)) {
+                val item = runCatching {
+                    TraderAttachmentProcessor.process(this@MainActivity, uri)
+                }.getOrElse { error ->
+                    TraderAttachment(
+                        name = uri.lastPathSegment ?: "attachment",
+                        mimeType = contentResolver.getType(uri).orEmpty(),
+                        extractedText = "",
+                        kind = "Error: ${error.message ?: "unreadable"}"
+                    )
+                }
+                loaded += item
+            }
+            traderAttachments = (traderAttachments + loaded).takeLast(6)
+            traderAttachmentBusy = false
+            Toast.makeText(
+                this@MainActivity,
+                "Attached ${loaded.size} file(s).",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     private fun requestNotificationPermissionIfNeeded() {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -411,6 +462,8 @@ private fun InvestAlertApp(
     dailyMoveThreshold: Double,
     newsAlerts: Boolean,
     morningBrief: Boolean,
+    traderAttachments: List<TraderAttachment>,
+    traderAttachmentBusy: Boolean,
     onRefresh: () -> Unit,
     onSave: (Holding) -> Unit,
     onDelete: (String) -> Unit,
@@ -431,7 +484,9 @@ private fun InvestAlertApp(
     onSetNewsAlerts: (Boolean) -> Unit,
     onSetMorningBrief: (Boolean) -> Unit,
     onTestNotification: () -> Unit,
-    onAskTrader: (String, (TraderProEngine.AssistantReply) -> Unit) -> Unit
+    onAttachTrader: () -> Unit,
+    onRemoveTraderAttachment: (Int) -> Unit,
+    onAskTrader: (String, List<TraderAttachment>, (TraderProEngine.AssistantReply) -> Unit) -> Unit
 ) {
     var tab by remember { mutableStateOf(AppTab.PORTFOLIO) }
     var editing by remember { mutableStateOf<Holding?>(null) }
@@ -490,6 +545,10 @@ private fun InvestAlertApp(
             AppTab.TRADER -> TraderProScreen(
                 modifier = Modifier.padding(padding),
                 holdings = holdings,
+                attachments = traderAttachments,
+                attachmentBusy = traderAttachmentBusy,
+                onAttach = onAttachTrader,
+                onRemoveAttachment = onRemoveTraderAttachment,
                 onAskTrader = onAskTrader
             )
             AppTab.SETTINGS -> SettingsScreen(

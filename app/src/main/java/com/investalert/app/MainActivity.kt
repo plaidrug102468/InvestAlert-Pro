@@ -300,6 +300,7 @@ private fun InvestAlertApp(
     if (creating || editing != null) {
         InvestmentDialog(
             initial = editing,
+            baseCurrency = baseCurrency,
             onDismiss = {
                 creating = false
                 editing = null
@@ -331,7 +332,7 @@ private fun PortfolioScreen(
     fun converted(amount: Double, currency: String): Double? =
         fxRates[currency.uppercase(Locale.US)]?.let { amount * it }
 
-    val totalInvested = holdings.sumOf { converted(it.investedAmount, it.currency) ?: 0.0 }
+    val totalInvested = holdings.sumOf { converted(it.investedAmount, it.investedCurrency) ?: 0.0 }
     val totalCurrent = holdings.sumOf { h -> h.currentValue?.let { converted(it, h.currency) } ?: 0.0 }
     val hasPrices = holdings.any { h -> h.currentValue != null && fxRates.containsKey(h.currency.uppercase(Locale.US)) }
     val pnl = if (hasPrices) totalCurrent - totalInvested else null
@@ -392,6 +393,7 @@ private fun PortfolioScreen(
                     holding = holding,
                     baseCurrency = baseCurrency,
                     rateToBase = fxRates[holding.currency.uppercase(Locale.US)],
+                    investedRateToBase = fxRates[holding.investedCurrency.uppercase(Locale.US)],
                     onEdit = { onEdit(holding) },
                     onDelete = { onDelete(holding.id) },
                     onToggleEnabled = { onToggleEnabled(holding, it) }
@@ -418,22 +420,22 @@ private fun HoldingCard(
     holding: Holding,
     baseCurrency: String,
     rateToBase: Double?,
+    investedRateToBase: Double?,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggleEnabled: (Boolean) -> Unit
 ) {
     val currentValue = holding.currentValue
-    val pnl = holding.profitLoss
-    val pnlPct = holding.profitLossPercent
+    val baseValue = currentValue?.let { value -> rateToBase?.let { value * it } }
+    val baseInvested = investedRateToBase?.let { holding.investedAmount * it }
+    val basePnl = if (baseValue != null && baseInvested != null) baseValue - baseInvested else null
+    val pnlPct = if (basePnl != null && baseInvested != null && baseInvested > 0.0) basePnl / baseInvested * 100.0 else null
     val pnlColor = when {
-        pnl == null -> MaterialTheme.colorScheme.onSurface
-        pnl > 0 -> GainGreen
-        pnl < 0 -> LossRed
+        basePnl == null -> MaterialTheme.colorScheme.onSurface
+        basePnl > 0 -> GainGreen
+        basePnl < 0 -> LossRed
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val baseValue = currentValue?.let { value -> rateToBase?.let { value * it } }
-    val baseInvested = rateToBase?.let { holding.investedAmount * it }
-    val basePnl = if (baseValue != null && baseInvested != null) baseValue - baseInvested else null
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -461,11 +463,11 @@ private fun HoldingCard(
             HorizontalDivider()
 
             SummaryRow("Units", number(holding.units))
-            SummaryRow("Invested", money(holding.investedAmount, holding.currency))
-            holding.averageBuyPrice?.let { SummaryRow("Average buy", money(it, holding.currency)) }
+            SummaryRow("Invested", money(holding.investedAmount, holding.investedCurrency))
+            holding.averageCostPerUnit?.let { SummaryRow("Avg cost / unit", priceMoney(it, holding.investedCurrency)) }
             SummaryRow(
                 "Current price",
-                holding.lastPrice?.let { money(it, holding.currency) } ?: "Not refreshed"
+                holding.lastPrice?.let { priceMoney(it, holding.currency) } ?: "Not refreshed"
             )
             SummaryRow(
                 "Current value",
@@ -477,12 +479,8 @@ private fun HoldingCard(
             }
 
             SummaryRow(
-                if ((pnl ?: 0.0) >= 0) "Profit / loss" else "Loss",
-                when {
-                    basePnl != null -> signedMoney(basePnl, baseCurrency) + (pnlPct?.let { "  (${signedPct(it)})" } ?: "")
-                    pnl != null -> signedMoney(pnl, holding.currency) + (pnlPct?.let { "  (${signedPct(it)})" } ?: "")
-                    else -> "—"
-                },
+                if ((basePnl ?: 0.0) >= 0) "Profit" else "Loss",
+                if (basePnl != null) signedMoney(basePnl, baseCurrency) + (pnlPct?.let { "  (${signedPct(it)})" } ?: "") else "—",
                 valueColor = pnlColor
             )
 
@@ -687,6 +685,7 @@ private fun SettingsScreen(
 @Composable
 private fun InvestmentDialog(
     initial: Holding?,
+    baseCurrency: String,
     onSearchAssets: (String, (List<AssetSuggestion>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
     onSave: (Holding) -> Unit
@@ -704,7 +703,8 @@ private fun InvestmentDialog(
     var name by remember(initial?.id) { mutableStateOf(initial?.name ?: "") }
     var symbol by remember(initial?.id) { mutableStateOf(initial?.symbol ?: "") }
     var market by remember(initial?.id) { mutableStateOf(initial?.market ?: "") }
-    var currency by remember(initial?.id) { mutableStateOf(initial?.currency ?: "ZAR") }
+    var currency by remember(initial?.id) { mutableStateOf(initial?.currency ?: "USD") }
+    var investedCurrency by remember(initial?.id) { mutableStateOf(initial?.investedCurrency ?: baseCurrency) }
     var whereHeld by remember(initial?.id) { mutableStateOf(initial?.whereHeld ?: "") }
     var unitsText by remember(initial?.id) { mutableStateOf(initial?.units?.toString() ?: "") }
     var investedText by remember(initial?.id) { mutableStateOf(initial?.investedAmount?.toString() ?: "") }
@@ -880,11 +880,23 @@ private fun InvestmentDialog(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true
                     )
+                    Text("Currency you paid in", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+                    AppSettings.supportedCurrencies.chunked(5).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            row.forEach { ccy ->
+                                FilterChip(
+                                    selected = ccy == investedCurrency,
+                                    onClick = { investedCurrency = ccy },
+                                    label = { Text(ccy) }
+                                )
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = investedText,
                         onValueChange = { investedText = numericInput(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Amount invested ($currency)") },
+                        label = { Text("Amount invested ($investedCurrency)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true
                     )
@@ -960,6 +972,7 @@ private fun InvestmentDialog(
                                         whereHeld = whereHeld.trim(),
                                         units = units!!,
                                         investedAmount = invested!!,
+                                        investedCurrency = investedCurrency,
                                         currency = currency,
                                         lowAlert = low,
                                         highAlert = high,
@@ -1020,6 +1033,28 @@ private fun money(value: Double, currency: String): String {
         else -> "$code "
     }
     return prefix + String.format(Locale.US, "%,.2f", value)
+}
+
+private fun priceMoney(value: Double, currency: String): String {
+    val code = currency.uppercase(Locale.US)
+    val prefix = when (code) {
+        "ZAR" -> "R"
+        "USD" -> "$"
+        "EUR" -> "€"
+        "GBP" -> "£"
+        "JPY" -> "¥"
+        "CNY" -> "¥"
+        "INR" -> "₹"
+        else -> "$code "
+    }
+    val decimals = when {
+        value.absoluteValue == 0.0 -> 2
+        value.absoluteValue < 0.0001 -> 8
+        value.absoluteValue < 0.01 -> 6
+        value.absoluteValue < 1.0 -> 4
+        else -> 2
+    }
+    return prefix + String.format(Locale.US, "%,.${decimals}f", value)
 }
 
 private fun signedMoney(value: Double, currency: String): String {

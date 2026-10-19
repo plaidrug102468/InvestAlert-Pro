@@ -49,7 +49,8 @@ object TraderProEngine {
     suspend fun answer(
         question: String,
         holdings: List<Holding>,
-        attachments: List<TraderAttachment> = emptyList()
+        attachments: List<TraderAttachment> = emptyList(),
+        conversationContext: String = ""
     ): AssistantReply = withContext(Dispatchers.IO) {
         val attachmentText = attachments.joinToString("\n\n") { it.summary }.take(18000)
         val q = question.trim().lowercase(Locale.US)
@@ -57,6 +58,22 @@ object TraderProEngine {
 
         val matched = holdings.firstOrNull { h ->
             q.contains(h.name.lowercase(Locale.US)) || q.contains(h.symbol.removeSuffix(".JO").lowercase(Locale.US))
+        }
+
+        val followUpSymbol = if (
+            matched == null &&
+            conversationContext.isNotBlank() &&
+            listOf(" it", "that", "this one", "same", "what about", "and what").any { q.contains(it) }
+        ) {
+            recentSymbol(conversationContext)
+        } else null
+
+        val followUpAsset = followUpSymbol?.let { sym ->
+            runCatching { AssetSearchProvider.search(sym, 5).firstOrNull { it.symbol.equals(sym, true) } }
+                .getOrNull()
+                ?: holdings.firstOrNull { it.symbol.equals(sym, true) }?.let {
+                    AssetSuggestion(it.symbol, it.name, it.market, it.assetType, it.currency)
+                }
         }
 
         val genericScan = listOf("best", "where to invest", "opportun", "portfolio", "risk", "sell", "reduce", "crypto", "forex", "jse", " us ").any { q.contains(it) }
@@ -81,6 +98,7 @@ object TraderProEngine {
 
         when {
             comparisonAssets.size >= 2 -> compareAssets(comparisonAssets.take(3))
+            followUpAsset != null -> analyzeDiscovered(followUpAsset)
             matched != null -> {
                 val a = runCatching { analyzeSymbol(matched.symbol) }.getOrNull()
                 if (a == null) AssistantReply("${matched.name} review","Recent market history is unavailable right now.")
@@ -294,6 +312,20 @@ object TraderProEngine {
             yearHigh = yearHigh,
             chartPrices = closes.takeLast(minOf(90, closes.size))
         )
+    }
+
+    private fun recentSymbol(context: String): String? {
+        val explicit = Regex("""\b[A-Z0-9^]{2,8}(?:\.JO|-USD|=X)\b""")
+            .findAll(context.uppercase(Locale.US))
+            .map { it.value }
+            .toList()
+        if (explicit.isNotEmpty()) return explicit.last()
+
+        val common = listOf(
+            "BTC-USD","ETH-USD","SOL-USD","XRP-USD","SHIB-USD",
+            "APN.JO","SOL.JO","NPN.JO","MSFT","AAPL","NVDA","TSLA","AMZN"
+        )
+        return common.lastOrNull { context.uppercase(Locale.US).contains(it) }
     }
 
     private suspend fun analyzeAttachment(

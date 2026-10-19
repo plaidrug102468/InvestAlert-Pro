@@ -736,6 +736,7 @@ private fun SettingsScreen(
             "Prices and instrument search use public internet market-data endpoints on a best-effort basis. No paid API key or InvestAlert account is required.",
             style = MaterialTheme.typography.labelSmall
         )
+        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall)
         Spacer(Modifier.height(88.dp))
     }
 }
@@ -848,6 +849,11 @@ private fun InvestmentDialog(
                     }
 
                     if (suggestions.isNotEmpty() && selectedAsset == null && !manualMode) {
+                        Text(
+                            if (searchQuery.isBlank()) "Popular investments" else "Suggestions",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall
+                        )
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -892,6 +898,13 @@ private fun InvestmentDialog(
                                 }
                             }
                         }
+                    }
+
+                    if (!manualMode && !searching && searchQuery.length >= 2 && suggestions.isEmpty() && selectedAsset == null) {
+                        Text(
+                            "No match found yet. Try the company name, ticker, coin name or forex pair.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
 
                     selectedAsset?.let { asset ->
@@ -1083,6 +1096,7 @@ private fun InvestmentDialog(
                                         highAlert = high,
                                         enabled = enabled,
                                         lastPrice = initial?.lastPrice,
+                                        dayChangePercent = initial?.dayChangePercent,
                                         lastUpdatedEpochMs = initial?.lastUpdatedEpochMs,
                                         lowTriggered = initial?.lowTriggered ?: false,
                                         highTriggered = initial?.highTriggered ?: false,

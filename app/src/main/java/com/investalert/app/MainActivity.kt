@@ -38,7 +38,6 @@ import com.investalert.app.data.CurrencyConverter
 import com.investalert.app.data.HoldingStore
 import com.investalert.app.data.InvestmentScreenshotParser
 import com.investalert.app.data.OcrLine
-import com.investalert.app.data.OcrLine
 import com.investalert.app.data.ScreenshotInvestmentDraft
 import com.investalert.app.data.TraderProEngine
 import com.investalert.app.data.TransactionStore
